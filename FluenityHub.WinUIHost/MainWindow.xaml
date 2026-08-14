@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="FluenityHub_WinUIHost.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:animatedvisuals="using:Microsoft.UI.Xaml.Controls.AnimatedVisuals"
+    xmlns:controls="using:FluenityHub_WinUIHost.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="FluenityHub"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="Base" />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="AppRootGrid">
+        <Grid.Resources>
+            <Style x:Key="AccountMenuFlyoutHeaderStyle" TargetType="controls:AccountMenuFlyoutHeader">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="controls:AccountMenuFlyoutHeader">
+                            <Grid
+                                MinWidth="280"
+                                Padding="12,6,14,6"
+                                AutomationProperties.AccessibilityView="Raw">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="36" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <PersonPicture
+                                    Width="36"
+                                    Height="36"
+                                    DisplayName="{TemplateBinding DisplayName}" />
+
+                                <StackPanel
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Spacing="1">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                                        Text="{TemplateBinding DisplayName}"
+                                        TextWrapping="NoWrap" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{TemplateBinding Description}"
+                                        TextWrapping="NoWrap" />
+                                    <HyperlinkButton
+                                        MinHeight="20"
+                                        Padding="0"
+                                        HorizontalAlignment="Left"
+                                        Content="Manage Unity account"
+                                        FontSize="12"
+                                        NavigateUri="https://cloud.unity.com/account/account-settings"
+                                        ToolTipService.ToolTip="Open cloud.unity.com account settings in your default browser" />
+                                </StackPanel>
+
+                                <ProgressRing
+                                    Grid.Column="3"
+                                    Width="16"
+                                    Height="16"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    IsActive="{TemplateBinding IsBusy}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Grid.Resources>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar
+            x:Name="AppTitleBar"
+            AutomationProperties.Name="FluenityHub title bar"
+            Title="FluenityHub">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="/Assets/FluenityHub_Logo.png" />
+            </TitleBar.IconSource>
+            <TitleBar.RightHeader>
+                <Button
+                    x:Name="AccountButton"
+                    Width="32"
+                    Height="32"
+                    CenterPoint="16,16,0"
+                    Margin="0,0,-4,0"
+                    Padding="0"
+                    AutomationProperties.Name="Unity account"
+                    BorderThickness="0"
+                    CornerRadius="16"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="Unity account">
+                    <Button.ScaleTransition>
+                        <Vector3Transition Duration="0:0:0.08" />
+                    </Button.ScaleTransition>
+                    <PersonPicture
+                        x:Name="TitleBarPersonPicture"
+                        Width="32"
+                        Height="32"
+                        AutomationProperties.Name="Unity account profile"
+                        FontFamily="Segoe Fluent Icons"
+                        Initials="&#xE77B;" />
+                    <Button.Flyout>
+                        <MenuFlyout
+                            x:Name="AccountMenuFlyout"
+                            Opening="OnAccountFlyoutOpening"
+                            Placement="BottomEdgeAlignedRight">
+                            <controls:AccountMenuFlyoutHeader
+                                x:Name="AccountMenuHeader"
+                                AutomationProperties.Name="Unity account"
+                                Description="Not signed in"
+                                DisplayName="Unity ID"
+                                Style="{StaticResource AccountMenuFlyoutHeaderStyle}" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                Click="OnOpenUnityLicensesClick"
+                                Text="Manage Unity licenses">
+                                <MenuFlyoutItem.Icon>
+                                    <AnimatedIcon>
+                                        <AnimatedIcon.Source>
+                                            <animatedvisuals:AnimatedSettingsVisualSource />
+                                        </AnimatedIcon.Source>
+                                    </AnimatedIcon>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                x:Name="SwitchUnityAccountMenuItem"
+                                Click="OnSwitchUnityAccountClick"
+                                Text="Sign in">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE748;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem
+                                x:Name="SignOutUnityMenuItem"
+                                Click="OnSignOutUnityClick"
+                                Text="Sign out"
+                                Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xF3B1;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </TitleBar.RightHeader>
+        </TitleBar>
+
+        <InfoBar
+            x:Name="AppUpdateInfoBar"
+            Grid.Row="1"
+            Margin="16,8,16,0"
+            VerticalAlignment="Top"
+            Canvas.ZIndex="200"
+            IsClosable="True"
+            IsOpen="False"
+            Severity="Success"
+            Title="Update available">
+            <InfoBar.ActionButton>
+                <Button
+                    x:Name="InstallUpdateBtn"
+                    Click="OnInstallUpdateClick"
+                    Content="Update now"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </InfoBar.ActionButton>
+            <InfoBar.Content>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <HyperlinkButton
+                        x:Name="SeeChangesBtn"
+                        VerticalAlignment="Center"
+                        Click="OnSeeChangesClick"
+                        Content="See changes" />
+                </StackPanel>
+            </InfoBar.Content>
+        </InfoBar>
+
+        <Frame x:Name="RootFrame" Grid.Row="1" />
+    </Grid>
+</Window>

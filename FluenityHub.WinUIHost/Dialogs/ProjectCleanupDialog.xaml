@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.ProjectCleanupDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    Title="Clean cache &amp; temporary files"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="Clean"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">560</x:Double>
+    </ContentDialog.Resources>
+
+    <ScrollViewer
+        MaxHeight="580"
+        HorizontalScrollBarVisibility="Disabled"
+        VerticalScrollBarVisibility="Auto">
+        <StackPanel
+            MinWidth="460"
+            HorizontalAlignment="Stretch"
+            Spacing="16">
+            <!-- Subtitle Header -->
+            <StackPanel Spacing="2">
+                <TextBlock
+                    x:Name="ProjectTitleTextBlock"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Project Title" />
+                <TextBlock
+                    x:Name="ProjectPathTextBlock"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="C:\Projects\MyUnityProject"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+
+            <!-- SettingsExpander for cleanup options. The content slot is the
+                 standard trailing action area next to the chevron. -->
+            <controls:SettingsExpander
+                x:Name="CleanupExpander"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Description="Scanning files..."
+                Header="Project cleanup options"
+                HeaderIcon="{ui:FontIcon Glyph=&#xE74D;}"
+                IsExpanded="True">
+                <ProgressRing
+                    x:Name="ScanProgressRing"
+                    Width="20"
+                    Height="20"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Scanning cleanup folders"
+                    IsActive="True" />
+
+                <controls:SettingsExpander.Items>
+                    <!-- 1. Library Folder Card -->
+                    <controls:SettingsCard
+                        IsActionIconVisible="False"
+                        HorizontalContentAlignment="Right">
+                        <controls:SettingsCard.Header>
+                            <CheckBox
+                                x:Name="CleanLibraryCheckBox"
+                                Margin="-38,0,0,0"
+                                AutomationProperties.Name="Clean Library folder"
+                                Click="OnOptionCheckBoxClick"
+                                IsChecked="True"
+                                VerticalAlignment="Center">
+                                <StackPanel Margin="6,0,0,0" Spacing="2">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Library folder (Asset &amp; Shader Cache)" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="Asset database, package cache, and compiled shaders. Safe to delete."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </controls:SettingsCard.Header>
+                        <TextBlock
+                            x:Name="LibrarySizeTextBlock"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="0 B"
+                            TextAlignment="Right" />
+                    </controls:SettingsCard>
+
+                    <!-- 2. Temp & Obj Folders Card -->
+                    <controls:SettingsCard
+                        IsActionIconVisible="False"
+                        HorizontalContentAlignment="Right">
+                        <controls:SettingsCard.Header>
+                            <CheckBox
+                                x:Name="CleanTempCheckBox"
+                                Margin="-38,0,0,0"
+                                AutomationProperties.Name="Clean Temp and Obj folders"
+                                Click="OnOptionCheckBoxClick"
+                                IsChecked="True"
+                                VerticalAlignment="Center">
+                                <StackPanel Margin="6,0,0,0" Spacing="2">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Temp &amp; Obj folders" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="Temporary workspace and script compilation files."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </controls:SettingsCard.Header>
+                        <TextBlock
+                            x:Name="TempSizeTextBlock"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="0 B"
+                            TextAlignment="Right" />
+                    </controls:SettingsCard>
+
+                    <!-- 3. Logs Folder Card -->
+                    <controls:SettingsCard
+                        IsActionIconVisible="False"
+                        HorizontalContentAlignment="Right">
+                        <controls:SettingsCard.Header>
+                            <CheckBox
+                                x:Name="CleanLogsCheckBox"
+                                Margin="-38,0,0,0"
+                                AutomationProperties.Name="Clean Logs folder"
+                                Click="OnOptionCheckBoxClick"
+                                IsChecked="True"
+                                VerticalAlignment="Center">
+                                <StackPanel Margin="6,0,0,0" Spacing="2">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Logs folder" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="Unity Editor and player build diagnostic logs."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </controls:SettingsCard.Header>
+                        <TextBlock
+                            x:Name="LogsSizeTextBlock"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="0 B"
+                            TextAlignment="Right" />
+                    </controls:SettingsCard>
+
+                    <!-- 4. Build Output Folders Card -->
+                    <controls:SettingsCard
+                        IsActionIconVisible="False"
+                        HorizontalContentAlignment="Right">
+                        <controls:SettingsCard.Header>
+                            <CheckBox
+                                x:Name="CleanBuildsCheckBox"
+                                Margin="-38,0,0,0"
+                                AutomationProperties.Name="Clean Build and Builds folders"
+                                Click="OnOptionCheckBoxClick"
+                                IsChecked="False"
+                                VerticalAlignment="Center">
+                                <StackPanel Margin="6,0,0,0" Spacing="2">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Build &amp; Builds folders" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="Compiled standalone build binaries and output packages."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </controls:SettingsCard.Header>
+                        <TextBlock
+                            x:Name="BuildsSizeTextBlock"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="0 B"
+                            TextAlignment="Right" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- Information Notice -->
+            <InfoBar
+                IsClosable="False"
+                IsOpen="True"
+                Message="Deleting the Library folder is safe. Unity will re-import assets on next launch."
+                Severity="Informational" />
+
+            <StackPanel
+                x:Name="CleanupProgressPanel"
+                Spacing="8"
+                Visibility="Collapsed">
+                <TextBlock
+                    x:Name="CleanupStatusTextBlock"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Cleaning selected folders..." />
+                <ProgressBar
+                    x:Name="CleanupProgressBar"
+                    AutomationProperties.Name="Cleanup progress"
+                    IsIndeterminate="False"
+                    Maximum="100"
+                    Minimum="0" />
+            </StackPanel>
+
+            <!-- Status / Error Text -->
+            <TextBlock
+                x:Name="StatusTextBlock"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Visibility="Collapsed" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

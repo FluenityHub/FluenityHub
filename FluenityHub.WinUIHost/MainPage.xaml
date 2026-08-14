@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="FluenityHub_WinUIHost.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <NavigationView
+        x:Name="AppNavigationView"
+        BackRequested="OnNavigationViewBackRequested"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="True"
+        OpenPaneLength="220"
+        PaneDisplayMode="Left"
+        SelectionChanged="OnNavigationViewSelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem AutomationProperties.Name="Projects" Content="Projects" Tag="projects">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE80F;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem AutomationProperties.Name="Templates" Content="Templates" Tag="templates">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xF0E2;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem AutomationProperties.Name="Installs" Content="Installs" Tag="editors">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xEC7A;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+        <Frame x:Name="ContentFrame" Navigated="OnContentFrameNavigated" />
+    </NavigationView>
+</Page>

@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.InstallEditorDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost.Dialogs"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Install Unity Editor"
+    CloseButtonText="Cancel"
+    DefaultButton="None"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">640</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid Width="592" MinHeight="360" MaxHeight="500" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <SelectorBar
+            x:Name="ReleaseSelector"
+            Grid.Row="0"
+            AutomationProperties.Name="Release channel"
+            SelectionChanged="OnReleaseSelectorChanged">
+            <SelectorBarItem x:Name="OfficialSelectorItem" Text="Official releases" Tag="official" />
+            <SelectorBarItem Text="Pre-releases" Tag="prerelease" />
+            <SelectorBarItem x:Name="ArchiveSelectorItem" Text="Archive" Tag="archive" />
+        </SelectorBar>
+
+        <Grid
+            x:Name="ArchiveFiltersPanel"
+            Grid.Row="1"
+            ColumnSpacing="8"
+            Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <AutoSuggestBox
+                x:Name="ArchiveSearchBox"
+                HorizontalAlignment="Stretch"
+                AutomationProperties.Name="Search release archive"
+                PlaceholderText="Search archive"
+                QueryIcon="Find"
+                TextChanged="OnArchiveSearchTextChanged" />
+
+            <ComboBox
+                x:Name="ArchiveVersionFilterComboBox"
+                Grid.Column="1"
+                MinWidth="136"
+                HorizontalAlignment="Stretch"
+                AutomationProperties.Name="Filter archive by Unity version"
+                SelectedIndex="0"
+                SelectionChanged="OnArchiveFilterSelectionChanged">
+                <ComboBoxItem Content="All versions" Tag="" />
+            </ComboBox>
+
+            <ComboBox
+                x:Name="ArchiveStreamFilterComboBox"
+                Grid.Column="2"
+                MinWidth="136"
+                Margin="0,0,2,0"
+                HorizontalAlignment="Stretch"
+                AutomationProperties.Name="Filter archive by release stream"
+                SelectedIndex="0"
+                SelectionChanged="OnArchiveFilterSelectionChanged">
+                <ComboBoxItem Content="All streams" Tag="" />
+                <ComboBoxItem Content="LTS" Tag="LTS" />
+                <ComboBoxItem Content="Supported" Tag="SUPPORTED" />
+                <ComboBoxItem Content="Tech stream" Tag="TECH" />
+                <ComboBoxItem Content="Beta" Tag="BETA" />
+                <ComboBoxItem Content="Alpha" Tag="ALPHA" />
+            </ComboBox>
+
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <ListView
+                x:Name="ReleasesListView"
+                AutomationProperties.Name="Unity Editor releases"
+                ContainerContentChanging="OnReleaseContainerContentChanging"
+                IsItemClickEnabled="False"
+                ItemsSource="{x:Bind Releases, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Margin" Value="0,0,0,4" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:UnityEditorReleaseListItem">
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{ThemeResource ControlCornerRadius}">
+                            <Grid MinHeight="68" Padding="12,8" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon
+                                    Width="28"
+                                    VerticalAlignment="Center"
+                                    FontSize="22"
+                                    Glyph="&#xF158;" />
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock
+                                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                                            Text="{x:Bind DisplayName, Mode=OneTime}" />
+                                        <Border
+                                            Padding="6,1"
+                                            Background="{ThemeResource ControlAltFillColorSecondaryBrush}"
+                                            CornerRadius="4"
+                                            Visibility="{x:Bind NeutralStreamBadgeVisibility, Mode=OneTime}">
+                                            <TextBlock
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Text="{x:Bind StreamBadge, Mode=OneTime}" />
+                                        </Border>
+                                        <Border
+                                            Padding="6,1"
+                                            Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                            CornerRadius="4"
+                                            Visibility="{x:Bind BetaBadgeVisibility, Mode=OneTime}">
+                                            <TextBlock
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Text="Beta" />
+                                        </Border>
+                                        <Border
+                                            Padding="6,1"
+                                            Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                                            CornerRadius="4"
+                                            Visibility="{x:Bind AlphaBadgeVisibility, Mode=OneTime}">
+                                            <TextBlock
+                                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Text="Alpha" />
+                                        </Border>
+                                        <Border
+                                            Padding="6,1"
+                                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                            CornerRadius="4"
+                                            Visibility="{x:Bind RecommendedVisibility, Mode=OneTime}">
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Text="Recommended" />
+                                        </Border>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind ReleaseSummary, Mode=OneTime}" />
+                                        <HyperlinkButton
+                                            MinHeight="0"
+                                            Padding="0"
+                                            AutomationProperties.Name="{x:Bind ReleaseNotesAutomationName, Mode=OneTime}"
+                                            Click="OnReleaseNotesClick"
+                                            Content="Release notes"
+                                            FontSize="12"
+                                            Tag="{x:Bind ReleaseNotesUri, Mode=OneTime}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Button
+                                    Grid.Column="2"
+                                    MinWidth="76"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{x:Bind InstallAutomationName, Mode=OneTime}"
+                                    Click="OnInstallClick"
+                                    Content="{x:Bind InstallButtonText, Mode=OneTime}"
+                                    IsEnabled="{x:Bind CanInstall, Mode=OneTime}"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Tag="{x:Bind Release, Mode=OneTime}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <ProgressBar
+                x:Name="LoadingProgressBar"
+                Height="2"
+                VerticalAlignment="Top"
+                AutomationProperties.Name="Loading more Unity releases"
+                IsIndeterminate="True"
+                Visibility="Collapsed" />
+
+            <StackPanel
+                x:Name="LoadingPanel"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
+                Spacing="10"
+                Visibility="Collapsed">
+                <ProgressRing
+                    Width="28"
+                    Height="28"
+                    IsActive="False" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Loading Unity releases…" />
+            </StackPanel>
+
+            <StackPanel
+                x:Name="EmptyPanel"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="6"
+                Visibility="Collapsed">
+                <FontIcon FontSize="28" Glyph="&#xE783;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    TextAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="No releases found" />
+                <TextBlock
+                    MaxWidth="320"
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap"
+                    Text="Try another channel or search term." />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="ErrorInfoBar"
+                Margin="0,8"
+                VerticalAlignment="Top"
+                IsClosable="False"
+                IsIconVisible="True"
+                IsOpen="False"
+                Severity="Error"
+                Title="Unity releases couldn’t be loaded">
+                <InfoBar.ActionButton>
+                    <Button Click="OnRetryClick" Content="Retry" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </Grid>
+
+        <HyperlinkButton
+            Grid.Row="3"
+            Padding="0"
+            HorizontalAlignment="Left"
+            Content="Unity beta program"
+            Click="OnBetaProgramClick" />
+    </Grid>
+</ContentDialog>

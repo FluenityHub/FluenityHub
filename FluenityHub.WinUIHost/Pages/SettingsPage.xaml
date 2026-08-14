@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="FluenityHub_WinUIHost.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost.Pages"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    xmlns:win="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    Unloaded="OnPageUnloaded"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <!-- Spacing between cards -->
+        <x:Double x:Key="SettingsCardSpacing">4</x:Double>
+
+        <!-- Style (inc. correct spacing) of a section header -->
+        <Style x:Key="SettingsSectionHeaderTextBlockStyle"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}"
+               TargetType="TextBlock">
+            <Style.Setters>
+                <Setter Property="Margin" Value="1,24,0,6" />
+            </Style.Setters>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Floating Status InfoBar -->
+        <InfoBar
+            x:Name="StatusInfoBar"
+            Grid.Row="0"
+            Margin="36,12,36,0"
+            Canvas.ZIndex="100"
+            Closed="OnStatusInfoBarClosed"
+            IsClosable="True"
+            IsOpen="False"
+            Visibility="Collapsed" />
+
+        <!-- Keep the settings content inside the available page width. -->
+        <ScrollViewer
+            Grid.Row="1"
+            HorizontalScrollBarVisibility="Disabled"
+            HorizontalScrollMode="Disabled"
+            VerticalScrollBarVisibility="Auto"
+            VerticalScrollMode="Enabled">
+            <Grid Margin="36,24,36,24" VerticalAlignment="Top">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Page Header Title -->
+                <TextBlock
+                    Grid.Row="0"
+                    Margin="0,0,0,16"
+                    Style="{StaticResource TitleTextBlockStyle}"
+                    Text="Settings" />
+
+                <!-- Settings Content Stack -->
+                <StackPanel
+                    Grid.Row="1"
+                    MaxWidth="1000"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
+                    Spacing="{StaticResource SettingsCardSpacing}">
+                    <StackPanel.ChildrenTransitions>
+                        <EntranceThemeTransition FromVerticalOffset="50" />
+                        <RepositionThemeTransition IsStaggeringEnabled="False" />
+                    </StackPanel.ChildrenTransitions>
+
+                    <!-- Appearance -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="Appearance" />
+
+                    <controls:SettingsCard
+                        Description="Select which app theme to display"
+                        Header="App theme"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                        <ComboBox
+                            x:Name="AppThemeComboBox"
+                            MinWidth="160"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="App theme mode"
+                            SelectedIndex="0"
+                            SelectionChanged="OnThemeSelectionChanged">
+                            <ComboBoxItem Content="Use system setting" Tag="Default" />
+                            <ComboBoxItem Content="Light" Tag="Light" />
+                            <ComboBoxItem Content="Dark" Tag="Dark" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+
+                    <!-- Behavior -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="Behavior" />
+
+                    <controls:SettingsCard
+                        Description="Control when FluenityHub minimizes to the system tray"
+                        Header="Minimize to System tray when"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE921;}">
+                        <ComboBox
+                            x:Name="MinimizeBehaviorComboBox"
+                            MinWidth="160"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Minimize to System tray when"
+                            SelectedIndex="0"
+                            SelectionChanged="OnMinimizeBehaviorSelectionChanged">
+                            <ComboBoxItem Content="Never" Tag="0" />
+                            <ComboBoxItem Content="when Unity Editor opens" Tag="1" />
+                            <ComboBoxItem Content="when Closing the Hub" Tag="2" />
+                            <ComboBoxItem Content="when Unity Editor opens or Closing the Hub" Tag="3" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+
+                    <controls:SettingsCard
+                        Description="Reduces FluenityHub's process priority to Below Normal while Unity Editor is running to save system resources"
+                        Header="Lower resource usage when Unity Editor opens"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE9F5;}">
+                        <ToggleSwitch
+                            x:Name="LowerPriorityToggleSwitch"
+                            AutomationProperties.Name="Lower resource usage when Unity Editor opens"
+                            IsOn="False"
+                            Toggled="OnLowerPriorityToggled" />
+                    </controls:SettingsCard>
+
+                    <controls:SettingsCard
+                        Description="Adds “Open with FluenityHub” to folder context menus in File Explorer"
+                        Header="File Explorer integration"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}">
+                        <ToggleSwitch
+                            x:Name="ExplorerContextMenuToggleSwitch"
+                            AutomationProperties.Name="Show Open with FluenityHub in File Explorer"
+                            IsOn="False"
+                            Toggled="OnExplorerContextMenuToggled" />
+                    </controls:SettingsCard>
+
+                    <!-- Unity environment -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="Unity environment" />
+
+                    <controls:SettingsCard
+                        Header="Unity Hub integration"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xF158;}">
+                        <controls:SettingsCard.Description>
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Shares Unity Hub's projects, templates, locations, and project naming preferences" />
+                        </controls:SettingsCard.Description>
+                        <Button Click="OnCheckUnityHubClick" Style="{StaticResource SubtleButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="12" Glyph="&#xE72C;" />
+                                <TextBlock Text="Check status" />
+                            </StackPanel>
+                        </Button>
+                    </controls:SettingsCard>
+
+                    <InfoBar
+                        x:Name="UnityHubStatusInfoBar"
+                        Closed="OnUnityHubStatusInfoBarClosed"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Success"
+                        Visibility="Collapsed" />
+
+                    <controls:SettingsCard
+                        x:Name="UnityAccountSettingsCard"
+                        AutomationProperties.Name="Unity licenses"
+                        Click="OnOpenUnityLicensesClick"
+                        Description="Manage your Unity ID and licenses"
+                        Header="Unity licenses"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE77B;}"
+                        IsClickEnabled="True" />
+
+                    <controls:SettingsCard
+                        x:Name="UnityLocationsSettingsCard"
+                        AutomationProperties.Name="Locations &amp; search paths"
+                        Click="OnOpenUnityLocationsClick"
+                        Description="Configure Unity Hub shared locations, default project naming, and custom search paths"
+                        Header="Locations &amp; search paths"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE773;}"
+                        IsClickEnabled="True" />
+
+                    <controls:SettingsCard
+                        Header="Unity command-line tools"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE756;}">
+                        <controls:SettingsCard.Description>
+                            <TextBlock
+                                x:Name="UnityCliDescriptionTextBlock"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Checking Unity CLI status…"
+                                TextWrapping="Wrap" />
+                        </controls:SettingsCard.Description>
+                        <StackPanel
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <Button
+                                x:Name="UnityCliActionButton"
+                                AutomationProperties.Name="Install or update Unity CLI"
+                                Click="OnUnityCliActionClick"
+                                Style="{StaticResource AccentButtonStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ProgressRing
+                                        x:Name="UnityCliActionProgressRing"
+                                        Width="14"
+                                        Height="14"
+                                        AutomationProperties.Name="Unity CLI operation in progress"
+                                        IsActive="False"
+                                        Visibility="Collapsed" />
+                                    <TextBlock
+                                        x:Name="UnityCliActionTextBlock"
+                                        Text="Install" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                x:Name="UnityCliMoreButton"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                AutomationProperties.Name="More Unity CLI options"
+                                Style="{StaticResource SubtleButtonStyle}"
+                                ToolTipService.ToolTip="More options"
+                                Visibility="Collapsed">
+                                <FontIcon FontSize="14" Glyph="&#xE712;" />
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuFlyoutItem
+                                            Click="OnOpenUnityCliDocumentationClick"
+                                            Text="Documentation">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xF000;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem
+                                            x:Name="UnityCliRemoveMenuItem"
+                                            Click="OnRemoveUnityCliClick"
+                                            Text="Remove Unity CLI">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE74D;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+                    </controls:SettingsCard>
+
+                    <InfoBar
+                        x:Name="UnityCliStatusInfoBar"
+                        Closed="OnUnityCliStatusInfoBarClosed"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Success"
+                        Visibility="Collapsed" />
+
+                    <!-- Accounts & integrations -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="Accounts &amp; integrations" />
+
+                    <controls:SettingsExpander
+                        x:Name="SourceControlSettingsExpander"
+                        Description="Manage your authentication tokens for remote repositories"
+                        Header="Repository providers"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xF003;}"
+                        IsExpanded="True">
+                        <ToggleSwitch
+                            x:Name="EnableSourceControlToggleSwitch"
+                            AutomationProperties.Name="Enable source control"
+                            IsOn="True"
+                            Toggled="OnEnableSourceControlToggled" />
+                        <controls:SettingsExpander.Items>
+                            <!-- GitHub Token Card -->
+                            <controls:SettingsCard x:Name="GitHubCard" Header="GitHub">
+                                <controls:SettingsCard.Description>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Personal Access Token" />
+                                        <Button
+                                            Width="18"
+                                            Height="18"
+                                            Padding="0"
+                                            AutomationProperties.Name="GitHub Token Info"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;• Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;• Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                                            <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                        </Button>
+                                        <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="*" />
+                                    </StackPanel>
+                                </controls:SettingsCard.Description>
+                                <Grid>
+                                    <!-- Unlinked Panel -->
+                                    <StackPanel
+                                        x:Name="GitHubUnlinkedPanel"
+                                        Orientation="Horizontal"
+                                        Spacing="8"
+                                        Visibility="Visible">
+                                        <PasswordBox
+                                            x:Name="GitHubTokenPasswordBox"
+                                            Width="200"
+                                            AutomationProperties.Name="GitHub Personal Access Token"
+                                            PasswordChanged="OnGitHubTokenPasswordChanged"
+                                            PasswordChar="•"
+                                            PlaceholderText="Enter your personal access token" />
+                                        <Button Click="OnGetGitHubTokenClick" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Open GitHub token page">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="Get a token" />
+                                                <FontIcon FontSize="10" Glyph="&#xE8A7;" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button
+                                            x:Name="GitHubAuthorizeButton"
+                                            Click="OnSaveGitHubTokenClick"
+                                            IsEnabled="False"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            ToolTipService.ToolTip="Authorize and save token">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ProgressRing
+                                                    x:Name="GitHubAuthorizeProgressRing"
+                                                    Width="14"
+                                                    Height="14"
+                                                    IsActive="False"
+                                                    Visibility="Collapsed" />
+                                                <TextBlock x:Name="GitHubAuthorizeTextBlock" Text="Authorize" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Linked Panel (Connected State) -->
+                                    <StackPanel
+                                        x:Name="GitHubLinkedPanel"
+                                        Orientation="Horizontal"
+                                        Spacing="12"
+                                        Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <FontIcon FontSize="14" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Glyph="&#xE73E;" />
+                                            <TextBlock
+                                                x:Name="GitHubUserTextBlock"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                Text="Connected" />
+                                        </StackPanel>
+                                        <Button
+                                            Click="OnDisconnectGitHubTokenClick"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="Remove saved GitHub token">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE711;" />
+                                                <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="Disconnect" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </controls:SettingsCard>
+
+                            <!-- GitLab Token Card -->
+                            <controls:SettingsCard x:Name="GitLabCard" Header="GitLab">
+                                <controls:SettingsCard.Description>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Personal Access Token" />
+                                        <Button
+                                            Width="18"
+                                            Height="18"
+                                            Padding="0"
+                                            AutomationProperties.Name="GitLab Token Info"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;Required Scopes:&#x0a;• api&#x0a;• read_user&#x0a;&#x0a;This allows FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                                            <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                        </Button>
+                                        <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="*" />
+                                    </StackPanel>
+                                </controls:SettingsCard.Description>
+                                <Grid>
+                                    <!-- Unlinked Panel -->
+                                    <StackPanel
+                                        x:Name="GitLabUnlinkedPanel"
+                                        Orientation="Horizontal"
+                                        Spacing="8"
+                                        Visibility="Visible">
+                                        <PasswordBox
+                                            x:Name="GitLabTokenPasswordBox"
+                                            Width="200"
+                                            AutomationProperties.Name="GitLab Personal Access Token"
+                                            PasswordChanged="OnGitLabTokenPasswordChanged"
+                                            PasswordChar="•"
+                                            PlaceholderText="Enter your personal access token" />
+                                        <Button Click="OnGetGitLabTokenClick" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Open GitLab token page">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="Get a token" />
+                                                <FontIcon FontSize="10" Glyph="&#xE8A7;" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button
+                                            x:Name="GitLabAuthorizeButton"
+                                            Click="OnSaveGitLabTokenClick"
+                                            IsEnabled="False"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            ToolTipService.ToolTip="Authorize and save token">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ProgressRing
+                                                    x:Name="GitLabAuthorizeProgressRing"
+                                                    Width="14"
+                                                    Height="14"
+                                                    IsActive="False"
+                                                    Visibility="Collapsed" />
+                                                <TextBlock x:Name="GitLabAuthorizeTextBlock" Text="Authorize" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Linked Panel (Connected State) -->
+                                    <StackPanel
+                                        x:Name="GitLabLinkedPanel"
+                                        Orientation="Horizontal"
+                                        Spacing="12"
+                                        Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <FontIcon FontSize="14" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Glyph="&#xE73E;" />
+                                            <TextBlock
+                                                x:Name="GitLabUserTextBlock"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                Text="Connected" />
+                                        </StackPanel>
+                                        <Button
+                                            Click="OnDisconnectGitLabTokenClick"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="Remove saved GitLab token">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE711;" />
+                                                <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="Disconnect" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </controls:SettingsCard>
+
+                            <controls:SettingsCard
+                                x:Name="SourceControlLocalStorageCard"
+                                Header="Local storage">
+                                <controls:SettingsCard.Description>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="Clear personal access tokens from the OS keychain on logout" />
+                                        <Button
+                                            Width="18"
+                                            Height="18"
+                                            Padding="0"
+                                            AutomationProperties.Name="Token cleanup information"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="When enabled, your GitHub and GitLab tokens will be removed from this device's secure storage whenever you sign out of Unity Hub.">
+                                            <FontIcon
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Glyph="&#xE9CE;" />
+                                        </Button>
+                                    </StackPanel>
+                                </controls:SettingsCard.Description>
+                                <ToggleSwitch
+                                    x:Name="ClearSourceControlTokensOnLogoutToggleSwitch"
+                                    AutomationProperties.Name="Clear personal access tokens on logout"
+                                    Toggled="OnClearSourceControlTokensOnLogoutToggled" />
+                            </controls:SettingsCard>
+                        </controls:SettingsExpander.Items>
+                    </controls:SettingsExpander>
+
+                    <!-- Maintenance & diagnostics -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="Maintenance &amp; diagnostics" />
+
+                    <controls:SettingsCard
+                        Description="This will remove projects from the Hub that are no longer found at their specified location. This action cannot be undone."
+                        Header="Remove missing projects"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE74D;}">
+                        <Button Click="OnRemoveMissingProjectsClick" Style="{StaticResource SubtleButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE74D;" />
+                                <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="Remove missing" />
+                            </StackPanel>
+                        </Button>
+                    </controls:SettingsCard>
+
+                    <InfoBar
+                        x:Name="RemoveMissingStatusInfoBar"
+                        Closed="OnRemoveMissingStatusInfoBarClosed"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Success"
+                        Visibility="Collapsed" />
+
+                    <controls:SettingsExpander
+                        Description="Open FluenityHub and Unity diagnostic, log, and cache folders"
+                        Header="Debug Logs"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE9D9;}">
+                        <controls:SettingsExpander.Items>
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Module download, installation, repair, and removal logs"
+                                Header="FluenityHub installation logs"
+                                IsClickEnabled="True"
+                                Tag="FluenityHubInstallationLogs" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Logs created by the installed Unity Hub"
+                                Header="Unity Hub logs"
+                                IsClickEnabled="True"
+                                Tag="UnityHubLogs" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Downloaded Unity Asset Store packages"
+                                Header="Asset packages"
+                                IsClickEnabled="True"
+                                Tag="AssetPackages" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Windows Error Reporting dump files"
+                                Header="Crash dumps"
+                                IsClickEnabled="True"
+                                Tag="CrashDumps" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Reports generated when the Unity Editor crashes"
+                                Header="Crash reports"
+                                IsClickEnabled="True"
+                                Tag="CrashReports" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Editor, previous-session, and Package Manager logs"
+                                Header="Editor logs"
+                                IsClickEnabled="True"
+                                Tag="EditorLogs" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Unity Licensing Client and entitlement audit logs"
+                                Header="Licensing logs"
+                                IsClickEnabled="True"
+                                Tag="LicensingLogs" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Unity Global Illumination cache"
+                                Header="GI cache"
+                                IsClickEnabled="True"
+                                Tag="GiCache" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Player logs organized by company and product"
+                                Header="Player logs"
+                                IsClickEnabled="True"
+                                Tag="PlayerLogs" />
+
+                            <controls:SettingsCard
+                                Click="OnOpenDiagnosticLocationClick"
+                                Description="Unity package and service cache"
+                                Header="Unity cache"
+                                IsClickEnabled="True"
+                                Tag="UnityCache" />
+                        </controls:SettingsExpander.Items>
+                    </controls:SettingsExpander>
+
+                    <!-- Standalone App Updates Card -->
+                    <controls:SettingsCard
+                        Description="Check GitHub for newer versions and release notes"
+                        Header="App updates"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <Button
+                            x:Name="CheckUpdatesButton"
+                            AutomationProperties.Name="Check for updates"
+                            Click="OnCheckUpdatesClick"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ProgressRing
+                                    x:Name="CheckUpdatesProgressRing"
+                                    Width="14"
+                                    Height="14"
+                                    AutomationProperties.Name="Checking for updates in progress"
+                                    IsActive="False"
+                                    Visibility="Collapsed" />
+                                <TextBlock
+                                    x:Name="CheckUpdatesButtonTextBlock"
+                                    Text="Check for updates" />
+                            </StackPanel>
+                        </Button>
+                    </controls:SettingsCard>
+
+                    <!-- Update Status Banner Underneath Card -->
+                    <InfoBar
+                        x:Name="SettingsUpdateInfoBar"
+                        Margin="0,-4,0,0"
+                        Closed="OnSettingsUpdateInfoBarClosed"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Success">
+                        <InfoBar.ActionButton>
+                            <Button
+                                x:Name="SettingsInstallUpdateBtn"
+                                Click="OnSettingsInstallUpdateClick"
+                                Content="Update now"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Visibility="Collapsed" />
+                        </InfoBar.ActionButton>
+                        <InfoBar.Content>
+                            <HyperlinkButton
+                                x:Name="SettingsSeeChangesBtn"
+                                VerticalAlignment="Center"
+                                Click="OnSettingsSeeChangesClick"
+                                Content="See changes"
+                                Visibility="Collapsed" />
+                        </InfoBar.Content>
+                    </InfoBar>
+
+                    <!-- About -->
+                    <TextBlock
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="About" />
+
+                    <controls:SettingsExpander
+                        Description="© 2026 FluenityHub. All rights reserved."
+                        Header="FluenityHub">
+                        <controls:SettingsExpander.HeaderIcon>
+                            <ImageIcon Source="ms-appx:///Assets/Square44x44Logo.targetsize-24.png" />
+                        </controls:SettingsExpander.HeaderIcon>
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            IsTextSelectionEnabled="True"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="1.0.0" />
+
+                        <controls:SettingsExpander.Items>
+                            <controls:SettingsCard
+                                Click="OnOpenGitHubClick"
+                                Header="Report an issue or suggest a feature"
+                                IsClickEnabled="True" />
+
+                            <controls:SettingsCard
+                                Click="OnUnityDiscussionsClick"
+                                Header="Unity Discussions &amp; Community"
+                                IsClickEnabled="True" />
+
+                            <controls:SettingsCard
+                                Click="OnUnityManualClick"
+                                Header="Unity Manual documentation"
+                                IsClickEnabled="True" />
+
+                            <controls:SettingsCard
+                                Click="OnUnityLearnClick"
+                                Header="Unity Learn"
+                                IsClickEnabled="True" />
+
+                            <controls:SettingsCard ContentAlignment="Left" HorizontalContentAlignment="Left">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Dependencies &amp; references" />
+                                    <StackPanel Spacing="2">
+                                        <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.3" />
+                                        <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />
+                                        <HyperlinkButton Click="OnOpenGitHubClick" Content="Windows Community Toolkit" />
+                                        <HyperlinkButton Click="OnOpenDocsClick" Content=".NET 10" />
+                                        <HyperlinkButton Click="OnOpenDocsClick" Content="System.Drawing.Common" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </controls:SettingsCard>
+
+                            <controls:SettingsCard ContentAlignment="Left" HorizontalContentAlignment="Left">
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource BodyTextBlockStyle}"
+                                    TextWrapping="Wrap">
+                                    <Run Text="FluenityHub is a Unity project manager built with WinUI and fully open source. This application is not affiliated with, nor endorsed by, " />
+                                    <Hyperlink Click="OnOpenUnityWebsiteClick" UnderlineStyle="None">Unity Technologies</Hyperlink>
+                                    <Run Text=". Contributions from the community are welcomed." />
+                                </TextBlock>
+                            </controls:SettingsCard>
+                        </controls:SettingsExpander.Items>
+                    </controls:SettingsExpander>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Page>

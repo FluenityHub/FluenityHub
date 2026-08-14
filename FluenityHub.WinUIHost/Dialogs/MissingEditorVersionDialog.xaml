@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.MissingEditorVersionDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <Grid MaxWidth="592" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <InfoBar
+            Title="Missing Editor version"
+            Message="{x:Bind WarningMessage, Mode=OneTime}"
+            IsClosable="False"
+            IsOpen="True"
+            Severity="Warning" />
+
+        <TextBlock
+            Grid.Row="1"
+            Margin="4,4,4,-4"
+            Style="{StaticResource BodyStrongTextBlockStyle}"
+            Text="Missing version" />
+
+        <ListView
+            x:Name="MissingVersionListView"
+            Grid.Row="2"
+            AutomationProperties.Name="Missing Unity Editor version"
+            ItemsSource="{x:Bind MissingVersionChoices}"
+            SelectionChanged="OnMissingVersionSelectionChanged"
+            SelectionMode="Single" />
+
+        <StackPanel
+            x:Name="InstalledVersionsPanel"
+            Grid.Row="3"
+            Spacing="8">
+            <TextBlock
+                Margin="4,4,4,-2"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Installed versions" />
+            <ListView
+                x:Name="InstalledVersionsListView"
+                MaxHeight="240"
+                AutomationProperties.Name="Installed Unity Editor versions"
+                ItemsSource="{x:Bind InstalledVersionChoices}"
+                SelectionChanged="OnInstalledVersionSelectionChanged"
+                SelectionMode="Single" />
+        </StackPanel>
+
+        <ComboBox
+            x:Name="TargetPlatformComboBox"
+            Grid.Row="4"
+            HorizontalAlignment="Stretch"
+            Header="Target platform (optional)"
+            PlaceholderText="Default from project settings"
+            Visibility="Collapsed" />
+
+        <HyperlinkButton
+            Grid.Row="5"
+            Margin="-8,0,0,-4"
+            AutomationProperties.Name="Install another Unity Editor version"
+            Click="OnInstallOtherVersionClick">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon FontSize="14" Glyph="&#xE896;" />
+                <TextBlock Text="Install another version" />
+            </StackPanel>
+        </HyperlinkButton>
+    </Grid>
+</ContentDialog>

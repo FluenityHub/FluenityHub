@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.EditorIntegrityDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Installation Repair &amp; Integrity"
+    CloseButtonText="Close"
+    DefaultButton="Close"
+    PrimaryButtonText="Repair Installation"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <Storyboard x:Name="CopyButtonPulseAnimation">
+            <DoubleAnimation
+                Storyboard.TargetName="CopyIconScaleTransform"
+                Storyboard.TargetProperty="ScaleX"
+                From="1.0"
+                To="1.35"
+                AutoReverse="True"
+                Duration="0:0:0.12">
+                <DoubleAnimation.EasingFunction>
+                    <QuadraticEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation
+                Storyboard.TargetName="CopyIconScaleTransform"
+                Storyboard.TargetProperty="ScaleY"
+                From="1.0"
+                To="1.35"
+                AutoReverse="True"
+                Duration="0:0:0.12">
+                <DoubleAnimation.EasingFunction>
+                    <QuadraticEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </ContentDialog.Resources>
+
+    <Grid MinWidth="440" MaxWidth="520" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Info -->
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock
+                x:Name="EditorVersionTitleTextBlock"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Unity Editor Installation" />
+            <TextBlock
+                x:Name="EditorPathTextBlock"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <!-- Status InfoBar -->
+        <InfoBar
+            x:Name="StatusInfoBar"
+            Grid.Row="1"
+            IsClosable="False"
+            IsOpen="True"
+            Severity="Informational" />
+
+        <!-- Diagnostic Log Section with Header and Copy Button -->
+        <Grid Grid.Row="2" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Log Header & Copy Button -->
+            <Grid Grid.Row="0">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Diagnostic details" />
+                <Button
+                    x:Name="CopyLogButton"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Copy diagnostic log details"
+                    Click="OnCopyLogsClick"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="Copy diagnostic log to clipboard">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon
+                            x:Name="CopyLogFontIcon"
+                            FontSize="12"
+                            Glyph="&#xE8C8;"
+                            RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <ScaleTransform x:Name="CopyIconScaleTransform" ScaleX="1.0" ScaleY="1.0" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                        <TextBlock
+                            x:Name="CopyLogTextBlock"
+                            FontSize="12"
+                            Text="Copy log" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- Diagnostic Log Output Box (RichTextBlock for seamless select-all and drag selection) -->
+            <Border
+                Grid.Row="1"
+                MaxHeight="220"
+                Padding="12"
+                Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <RichTextBlock
+                        x:Name="DiagnosticLogsRichTextBlock"
+                        FontFamily="Consolas, Segoe UI"
+                        FontSize="12"
+                        IsTextSelectionEnabled="True"
+                        TextWrapping="Wrap" />
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</ContentDialog>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.LaunchEditorDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    Title="Launch Unity Editor"
+    CloseButtonText="Cancel"
+    DefaultButton="Close"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <Grid Width="460">
+        <StackPanel Spacing="12">
+            <StackPanel Spacing="6">
+                <TextBlock
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Launch options" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Choose how you want to open this Unity Editor version:" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <!-- Recent Project SettingsCard (Visible if matching project exists) -->
+                <controls:SettingsCard
+                    x:Name="RecentProjectCard"
+                    AutomationProperties.Name="Open Recent Project"
+                    Click="OnRecentProjectClick"
+                    Description="Open most recent project for this version"
+                    Header="Recent Project"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}"
+                    IsClickEnabled="True"
+                    Visibility="Collapsed" />
+
+                <!-- Launch Sandbox SettingsCard -->
+                <controls:SettingsCard
+                    x:Name="SandboxCard"
+                    AutomationProperties.Name="Open Sandbox Editor"
+                    Click="OnSandboxClick"
+                    Description="Clean, empty scratchpad session for quick testing"
+                    Header="Open Sandbox Editor"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xE7C5;}"
+                    IsClickEnabled="True" />
+
+                <!-- Create New Project SettingsCard -->
+                <controls:SettingsCard
+                    x:Name="NewProjectCard"
+                    AutomationProperties.Name="Create New Project"
+                    Click="OnNewProjectClick"
+                    Description="Set up a new named project with templates &amp; source control"
+                    Header="Create New Project"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xE710;}"
+                    IsClickEnabled="True" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ContentDialog>

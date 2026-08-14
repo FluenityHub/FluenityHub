@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.ProjectCopyDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    CloseButtonClick="OnCloseButtonClick"
+    CloseButtonText="Cancel"
+    Closing="OnDialogClosing"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="False"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    SecondaryButtonClick="OnSecondaryButtonClick"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <Grid Width="500">
+        <StackPanel
+            x:Name="SetupPanel"
+            Spacing="16">
+            <TextBlock
+                x:Name="DescriptionTextBlock"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                TextWrapping="Wrap" />
+
+            <StackPanel Spacing="6">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Destination folder" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="DestinationTextBox"
+                        AutomationProperties.AutomationId="ProjectCopyDestination"
+                        AutomationProperties.Name="Destination folder"
+                        PlaceholderText="Choose a destination folder"
+                        TextChanged="OnInputChanged" />
+                    <Button
+                        x:Name="BrowseDestinationButton"
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="ProjectCopyBrowse"
+                        Click="OnBrowseDestinationClick"
+                        Content="Browse..." />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="New folder name" />
+                <TextBox
+                    x:Name="FolderNameTextBox"
+                    AutomationProperties.AutomationId="ProjectCopyFolderName"
+                    AutomationProperties.Name="New folder name"
+                    PlaceholderText="Project backup folder"
+                    TextChanged="OnInputChanged" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <CheckBox
+                    x:Name="IncludeUserSettingsCheckBox"
+                    AutomationProperties.AutomationId="ProjectCopyIncludeUserSettings"
+                    Content="Include project UserSettings"
+                    IsChecked="True" />
+                <CheckBox
+                    x:Name="IncludeGitHistoryCheckBox"
+                    AutomationProperties.AutomationId="ProjectCopyIncludeGit"
+                    Content="Include local Git history (.git)"
+                    IsChecked="True" />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="ExclusionsInfoBar"
+                IsClosable="False"
+                IsOpen="True"
+                Severity="Informational"
+                Title="Space-saving copy" />
+
+            <TextBlock
+                x:Name="ValidationTextBlock"
+                AutomationProperties.LiveSetting="Polite"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </StackPanel>
+
+        <StackPanel
+            x:Name="OperationPanel"
+            Spacing="16"
+            Visibility="Collapsed">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    x:Name="OperationHeadingTextBlock"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Preparing project files" />
+                <TextBlock
+                    x:Name="OperationDescriptionTextBlock"
+                    AutomationProperties.LiveSetting="Polite"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Calculating the files to copy..."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <ProgressBar
+                x:Name="OperationProgressBar"
+                AutomationProperties.AutomationId="ProjectCopyProgress"
+                AutomationProperties.Name="Project copy progress"
+                IsIndeterminate="True"
+                Maximum="100"
+                Minimum="0" />
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    x:Name="OperationCurrentItemTextBlock"
+                    MaxLines="1"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Waiting for file information..."
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    x:Name="OperationPercentageTextBlock"
+                    Grid.Column="1"
+                    MinWidth="36"
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+            </Grid>
+
+            <TextBlock
+                x:Name="OperationMetricsTextBlock"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}" />
+
+            <InfoBar
+                x:Name="OperationInfoBar"
+                IsClosable="False"
+                IsOpen="False" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>

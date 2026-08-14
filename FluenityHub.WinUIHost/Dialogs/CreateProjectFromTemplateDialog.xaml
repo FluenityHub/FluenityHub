@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.CreateProjectFromTemplateDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Create project from template"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="Create"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <StackPanel Width="480" Spacing="16">
+        <InfoBar
+            x:Name="TemplateInfoBar"
+            IsClosable="False"
+            IsOpen="True"
+            Severity="Informational" />
+
+        <TextBox
+            x:Name="ProjectNameTextBox"
+            AutomationProperties.AutomationId="TemplateProjectNameTextBox"
+            AutomationProperties.Name="Project name"
+            Header="Project name"
+            PlaceholderText="My project"
+            TextChanged="OnInputChanged" />
+
+        <StackPanel Spacing="6">
+            <TextBlock
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Location folder" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox
+                    x:Name="LocationTextBox"
+                    AutomationProperties.AutomationId="TemplateProjectLocationTextBox"
+                    AutomationProperties.Name="Project location folder"
+                    PlaceholderText="Choose a parent folder"
+                    TextChanged="OnInputChanged" />
+                <Button
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="BrowseTemplateProjectLocationButton"
+                    AutomationProperties.Name="Browse for project location"
+                    Click="OnBrowseLocationClick"
+                    Content="Browse…" />
+            </Grid>
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="A new folder with the project name will be created here."
+                TextWrapping="Wrap" />
+        </StackPanel>
+
+        <InfoBar
+            x:Name="ValidationInfoBar"
+            IsClosable="False"
+            IsOpen="False"
+            Severity="Error"
+            Title="Check project details" />
+    </StackPanel>
+</ContentDialog>

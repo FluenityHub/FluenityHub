@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>FluenityHub_WinUIHost</RootNamespace>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <!--
+      File-system publishes are self-contained for portable direct deployment.
+      MSIX builds are framework-dependent: Windows services the shared Windows
+      App SDK framework and the package avoids duplicate/self-contained payloads.
+    -->
+    <WindowsAppSdkSelfContained Condition="'$(GenerateAppxPackageOnBuild)' != 'true'">true</WindowsAppSdkSelfContained>
+    <WindowsAppSdkSelfContained Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">false</WindowsAppSdkSelfContained>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <EnableWinAppRunSupport>true</EnableWinAppRunSupport>
+    <AssemblyName>FluenityHub</AssemblyName>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Win32Icon>Assets\AppIcon.ico</Win32Icon>
+    <Title>FluenityHub</Title>
+    <AssemblyTitle>FluenityHub</AssemblyTitle>
+    <Product>FluenityHub</Product>
+    <Description>FluenityHub - Native Unity Hub Alternative</Description>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.298">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
+    <PackageReference Include="WinUIEx" Version="2.9.2" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug' or '$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug' or '$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishTrimmed>
+    <TrimMode Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">full</TrimMode>
+    <SelfContained Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</SelfContained>
+    <SelfContained Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">False</SelfContained>
+    <PublishAot Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishAot>
+    <PublishAot Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishAot>
+  </PropertyGroup>
+</Project>

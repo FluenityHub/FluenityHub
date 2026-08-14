@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="FluenityHub_WinUIHost.Pages.TemplatesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:FluenityHub_WinUIHost.Controls"
+    xmlns:models="using:FluenityHub_WinUIHost.Models"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style
+            x:Key="MissingEditorVersionMenuItemStyle"
+            TargetType="ToggleMenuFlyoutItem">
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Margin="36,24,36,24" Padding="0">
+        <Grid.ChildrenTransitions>
+            <RepositionThemeTransition IsStaggeringEnabled="False" />
+        </Grid.ChildrenTransitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Page Header Title -->
+        <TextBlock
+            Grid.Row="0"
+            Margin="0,0,0,16"
+            Style="{StaticResource TitleTextBlockStyle}"
+            Text="Templates" />
+
+        <!-- Command & Search Header Bar -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Group: Search & Refresh -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    Width="240"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Search templates"
+                    PlaceholderText="Search templates..."
+                    QueryIcon="Find"
+                    TextChanged="OnSearchTextChanged"
+                    UpdateTextOnSelect="False" />
+
+                <Button
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Refresh templates list"
+                    Click="OnRefreshClick"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="Refresh templates list (Ctrl+R)">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="R" Modifiers="Control" />
+                    </Button.KeyboardAccelerators>
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+            </StackPanel>
+
+            <!-- Right Group: New Template -->
+            <StackPanel Grid.Column="1" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                <Button
+                    x:Name="NewTemplateButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="NewTemplateButton"
+                    AutomationProperties.Name="New template"
+                    Click="OnNewTemplateClick"
+                    Style="{StaticResource AccentButtonStyle}"
+                    ToolTipService.ToolTip="Save an existing project as a custom template (Ctrl+N)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE710;" />
+                        <TextBlock x:Name="NewTemplateButtonLabel" Text="New template" />
+                    </StackPanel>
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="N" Modifiers="Control" />
+                    </Button.KeyboardAccelerators>
+                </Button>
+
+                <DropDownButton
+                    x:Name="DisplayOptionsDropDownButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Filter templates by Editor version"
+                    Content="Editor version"
+                    ToolTipService.ToolTip="Filter by Editor version">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout
+                            x:Name="EditorVersionFilterFlyout"
+                            Placement="BottomEdgeAlignedLeft" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
+                <DropDownButton
+                    x:Name="SortDropDownButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Sort templates"
+                    ToolTipService.ToolTip="Sort templates">
+                    <FontIcon FontSize="14" Glyph="&#xE8CB;" />
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesByNameItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortByGroup"
+                                Text="Name" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesByCreatedAtItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortByGroup"
+                                IsChecked="True"
+                                Text="Date created" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesByVersionItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortByGroup"
+                                Text="Template version" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesByEditorVersionItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortByGroup"
+                                Text="Editor version" />
+
+                            <MenuFlyoutSeparator />
+
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesAscendingItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortDirectionGroup"
+                                Text="Ascending" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortTemplatesDescendingItem"
+                                Click="OnSortOptionClick"
+                                GroupName="TemplateSortDirectionGroup"
+                                IsChecked="True"
+                                Text="Descending" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
+        </Grid>
+
+        <!-- Top Floating Overlay InfoBar (does not push page content) -->
+        <InfoBar
+            x:Name="StatusInfoBar"
+            Grid.Row="0"
+            Grid.RowSpan="5"
+            Margin="0,0,0,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Canvas.ZIndex="99"
+            IsClosable="True"
+            IsOpen="False" />
+
+        <!-- Summary Count TextBlock -->
+        <TextBlock
+            x:Name="SummaryTextBlock"
+            Grid.Row="3"
+            Margin="0,0,0,12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}" />
+
+        <Grid Grid.Row="4">
+            <GridView
+                x:Name="TemplatesGridView"
+                HorizontalAlignment="Stretch"
+                SelectionMode="None">
+                <GridView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsWrapGrid
+                            ItemHeight="216"
+                            ItemWidth="304"
+                            Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </GridView.ItemsPanel>
+                <GridView.ItemContainerStyle>
+                    <Style BasedOn="{StaticResource DefaultGridViewItemStyle}" TargetType="GridViewItem">
+                        <Setter Property="Width" Value="296" />
+                        <Setter Property="Height" Value="208" />
+                        <Setter Property="Margin" Value="0,0,8,8" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                    </Style>
+                </GridView.ItemContainerStyle>
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="models:CustomTemplateInfo">
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{ThemeResource ControlCornerRadius}">
+                            <Border.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem
+                                        Click="OnCreateProjectFromTemplateClick"
+                                        IsEnabled="{x:Bind IsEditorInstalled}"
+                                        Tag="{x:Bind}"
+                                        Text="Create project"
+                                        ToolTipService.ToolTip="{x:Bind CreateButtonToolTip}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE710;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem
+                                        Click="OnEditTemplateClick"
+                                        Tag="{x:Bind}"
+                                        Text="Edit template">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE70F;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnShowInExplorerClick"
+                                        Tag="{x:Bind}"
+                                        Text="Show in File Explorer">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE8B7;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem
+                                        Click="OnDeleteTemplateClick"
+                                        Tag="{x:Bind}"
+                                        Text="Delete">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE74D;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Border.ContextFlyout>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="100" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid
+                                    Grid.RowSpan="2"
+                                    Height="124"
+                                    VerticalAlignment="Top"
+                                    CornerRadius="3,3,0,0">
+                                    <controls:OpacityMaskView IsHitTestVisible="False">
+                                        <controls:OpacityMaskView.OpacityMask>
+                                            <Rectangle>
+                                                <Rectangle.Fill>
+                                                    <LinearGradientBrush
+                                                        StartPoint="0.5,0"
+                                                        EndPoint="0.5,1">
+                                                        <GradientStop Offset="0" Color="White" />
+                                                        <GradientStop Offset="0.78" Color="White" />
+                                                        <GradientStop Offset="1" Color="Transparent" />
+                                                    </LinearGradientBrush>
+                                                </Rectangle.Fill>
+                                            </Rectangle>
+                                        </controls:OpacityMaskView.OpacityMask>
+                                        <Grid Background="{x:Bind PreviewBackgroundBrush}">
+                                            <FontIcon
+                                                Margin="0,0,0,24"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                FontSize="36"
+                                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                Glyph="&#xF158;" />
+                                            <Image
+                                                AutomationProperties.Name="{x:Bind Name}"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Source="{x:Bind CoverImageSource}"
+                                                Stretch="UniformToFill"
+                                                Visibility="{x:Bind HasImage}" />
+                                        </Grid>
+                                    </controls:OpacityMaskView>
+                                </Grid>
+
+                                <StackPanel
+                                    Grid.Row="0"
+                                    Margin="8"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Bottom"
+                                    AutomationProperties.ItemStatus="{x:Bind EditorStatusLabel}"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    Translation="0,8,0">
+                                    <Border
+                                        Padding="6,2"
+                                        VerticalAlignment="Center"
+                                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                        CornerRadius="{ThemeResource ControlCornerRadius}">
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind EditorVersion}" />
+                                    </Border>
+
+                                    <Border
+                                        Padding="6,2"
+                                        VerticalAlignment="Center"
+                                        Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                        CornerRadius="{ThemeResource ControlCornerRadius}"
+                                        ToolTipService.ToolTip="Unity Editor version is not installed"
+                                        Visibility="{x:Bind IsEditorMissing}">
+                                        <TextBlock
+                                            FontSize="10"
+                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                            Text="Missing" />
+                                    </Border>
+                                </StackPanel>
+
+                                <Grid Grid.Row="1" Padding="14,8,14,10">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            MaxLines="1"
+                                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                                            Text="{x:Bind Name}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <Border
+                                            Grid.Column="1"
+                                            Padding="5,1"
+                                            VerticalAlignment="Center"
+                                            Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}">
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Version}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        Margin="0,2,0,6"
+                                        MaxLines="2"
+                                        VerticalAlignment="Top"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Description}"
+                                        TextTrimming="CharacterEllipsis"
+                                        TextWrapping="Wrap"
+                                        ToolTipService.ToolTip="{x:Bind Description}" />
+
+                                    <Grid Grid.Row="2" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border
+                                            HorizontalAlignment="Left"
+                                            Background="Transparent"
+                                            ToolTipService.ToolTip="{x:Bind CreateButtonToolTip}">
+                                            <Button
+                                                Height="32"
+                                                AutomationProperties.Name="Create project from template"
+                                                Click="OnCreateProjectFromTemplateClick"
+                                                Content="Create project"
+                                                IsEnabled="{x:Bind IsEditorInstalled}"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Tag="{x:Bind}" />
+                                        </Border>
+
+                                        <Button
+                                            Grid.Column="1"
+                                            Width="32"
+                                            Height="32"
+                                            Padding="0"
+                                            AutomationProperties.Name="Template options"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="More options">
+                                            <FontIcon FontSize="14" Glyph="&#xE712;" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuFlyoutItem
+                                                        Click="OnEditTemplateClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Edit template">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE70F;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutItem
+                                                        Click="OnShowInExplorerClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Show in File Explorer">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE8B7;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutSeparator />
+                                                    <MenuFlyoutItem
+                                                        Click="OnDeleteTemplateClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Delete">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE74D;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+
+            <StackPanel
+                x:Name="LoadingPanel"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                Visibility="Collapsed">
+                <ProgressRing
+                    Width="32"
+                    Height="32"
+                    HorizontalAlignment="Center"
+                    IsActive="True" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Loading templates…" />
+            </StackPanel>
+
+            <StackPanel
+                x:Name="EmptyStatePanel"
+                MaxWidth="460"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="10"
+                Visibility="Collapsed">
+                <FontIcon
+                    HorizontalAlignment="Center"
+                    FontSize="44"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Glyph="&#xF158;" />
+                <TextBlock
+                    x:Name="EmptyStateTitle"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Create your first template" />
+                <TextBlock
+                    x:Name="EmptyStateMessage"
+                    HorizontalAlignment="Center"
+                    TextAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Save a configured Unity project as a reusable starting point."
+                    TextWrapping="Wrap" />
+                <Button
+                    x:Name="EmptyStateActionButton"
+                    Height="32"
+                    Margin="0,6,0,0"
+                    HorizontalAlignment="Center"
+                    AutomationProperties.AutomationId="EmptyStateNewTemplateButton"
+                    AutomationProperties.Name="Create your first template"
+                    Click="OnNewTemplateClick"
+                    Content="New template"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="SearchBox.Width" Value="180" />
+                        <Setter Target="NewTemplateButtonLabel.Visibility" Value="Collapsed" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="720" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="SearchBox.Width" Value="240" />
+                        <Setter Target="NewTemplateButtonLabel.Visibility" Value="Visible" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+    </Grid>
+</Page>

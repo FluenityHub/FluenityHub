@@ -1,0 +1,989 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="FluenityHub_WinUIHost.Pages.ProjectsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost.Pages"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:FluenityHub_WinUIHost.Models"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <MenuFlyout x:Key="DisplayOptionsMenuFlyout" Placement="BottomEdgeAlignedRight">
+            <ToggleMenuFlyoutItem
+                x:Name="ShowFavoritesColumnItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="True"
+                Text="Favorites" />
+            <ToggleMenuFlyoutItem
+                x:Name="ShowSourceControlColumnItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="False"
+                Text="Source control" />
+            <ToggleMenuFlyoutItem
+                x:Name="ShowModifiedColumnItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="True"
+                Text="Modified" />
+            <ToggleMenuFlyoutItem
+                x:Name="ShowEditorVersionColumnItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="True"
+                Text="Editor version" />
+            <ToggleMenuFlyoutItem
+                x:Name="ShowPlatformColumnItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="True"
+                Text="Target platform" />
+
+            <MenuFlyoutSeparator />
+
+            <ToggleMenuFlyoutItem
+                x:Name="HideMissingProjectsItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="False"
+                Text="Hide missing projects" />
+
+            <MenuFlyoutSeparator />
+
+            <MenuFlyoutSubItem x:Name="GroupBySubItem" Text="Group projects by">
+                <RadioMenuFlyoutItem
+                    x:Name="GroupByNoneItem"
+                    Click="OnGroupByOptionClick"
+                    GroupName="GroupByGroup"
+                    IsChecked="True"
+                    Text="None" />
+                <RadioMenuFlyoutItem
+                    x:Name="GroupByFolderItem"
+                    Click="OnGroupByOptionClick"
+                    GroupName="GroupByGroup"
+                    Text="Group" />
+                <RadioMenuFlyoutItem
+                    x:Name="GroupBySourceControlItem"
+                    Click="OnGroupByOptionClick"
+                    GroupName="GroupByGroup"
+                    Text="Source Control" />
+                <RadioMenuFlyoutItem
+                    x:Name="GroupByEditorVersionItem"
+                    Click="OnGroupByOptionClick"
+                    GroupName="GroupByGroup"
+                    Text="Unity Version" />
+            </MenuFlyoutSubItem>
+
+            <MenuFlyoutSeparator />
+
+            <MenuFlyoutSubItem x:Name="EditorFilterSubItem" Text="Filter by Editor version" />
+            <MenuFlyoutSubItem x:Name="PlatformFilterSubItem" Text="Filter by platform" />
+            <MenuFlyoutSubItem x:Name="TagFilterSubItem" Text="Filter by tag" />
+        </MenuFlyout>
+
+        <CollectionViewSource x:Name="ProjectsCollectionViewSource" IsSourceGrouped="True" />
+    </Page.Resources>
+
+    <Grid Margin="36,24,36,24" Padding="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Page Header Title -->
+        <TextBlock
+            Grid.Row="0"
+            Margin="0,0,0,16"
+            Style="{StaticResource TitleTextBlockStyle}"
+            Text="Projects" />
+
+        <!-- Command & Search Header Bar -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Group: Search & Refresh -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    Width="240"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Search projects"
+                    PlaceholderText="Search projects..."
+                    QueryIcon="Find"
+                    QuerySubmitted="OnSearchQuerySubmitted"
+                    TextChanged="OnSearchTextChanged"
+                    UpdateTextOnSelect="False" />
+
+                <Button
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Refresh projects list"
+                    Click="OnReloadDataClick"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="Refresh projects list (Ctrl+R)">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="OnRefreshAccelerator" />
+                    </Button.KeyboardAccelerators>
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+            </StackPanel>
+
+            <!-- Right Group: Add Project, New Project, Sort -->
+            <StackPanel Grid.Column="1" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                <Button
+                    x:Name="AddSimpleButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Add existing project"
+                    Click="OnAddProjectClick"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="Add existing Unity project from folder"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE8F4;" />
+                        <TextBlock Text="Add project" />
+                    </StackPanel>
+                </Button>
+
+                <DropDownButton
+                    x:Name="AddDropDownButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    AutomationProperties.Name="Add project options"
+                    ToolTipService.ToolTip="Add existing project options">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE8F4;" />
+                        <TextBlock Text="Add project" />
+                    </StackPanel>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                            <MenuFlyoutItem Click="OnAddProjectClick" Text="Add project from disk">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Click="OnAddProjectFromRepositoryClick" Text="Add project from repository">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon FontSize="14" Glyph="&#xF003;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
+                <Button
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Create new project wizard"
+                    Click="OnNewProjectClick"
+                    Style="{StaticResource AccentButtonStyle}"
+                    ToolTipService.ToolTip="Create new Unity project wizard (Ctrl+N)">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="N" Modifiers="Control" Invoked="OnNewProjectAccelerator" />
+                    </Button.KeyboardAccelerators>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE710;" />
+                        <TextBlock Text="New project" />
+                    </StackPanel>
+                </Button>
+
+                <DropDownButton
+                    x:Name="DisplayOptionsDropDownButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Display options"
+                    Flyout="{StaticResource DisplayOptionsMenuFlyout}"
+                    ToolTipService.ToolTip="Display options">
+                    <FontIcon FontSize="14" Glyph="&#xE71C;" />
+                </DropDownButton>
+
+                <DropDownButton
+                    x:Name="SortDropDownButton"
+                    Height="32"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Sort projects"
+                    ToolTipService.ToolTip="Sort projects">
+                    <FontIcon FontSize="14" Glyph="&#xE8CB;" />
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <RadioMenuFlyoutItem
+                                x:Name="SortByNameItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortByGroup"
+                                Text="Name" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortByLastModifiedItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortByGroup"
+                                IsChecked="True"
+                                Text="Last modified" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortByEditorVersionItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortByGroup"
+                                Text="Editor version" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortByPlatformItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortByGroup"
+                                Text="Platform" />
+
+                            <MenuFlyoutSeparator />
+
+                            <RadioMenuFlyoutItem
+                                x:Name="KeepNoneOnTopItem"
+                                Click="OnSortOptionClick"
+                                GroupName="GroupTopGroup"
+                                Text="Default ordering" />
+                            <RadioMenuFlyoutItem
+                                x:Name="KeepStarredOnTopItem"
+                                Click="OnSortOptionClick"
+                                GroupName="GroupTopGroup"
+                                IsChecked="True"
+                                Text="Keep starred on top" />
+                            <RadioMenuFlyoutItem
+                                x:Name="KeepSourceControlOnTopItem"
+                                Click="OnSortOptionClick"
+                                GroupName="GroupTopGroup"
+                                Text="Keep source controlled on top" />
+
+                            <MenuFlyoutSeparator />
+
+                            <RadioMenuFlyoutItem
+                                x:Name="SortAscendingItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortDirectionGroup"
+                                Text="Ascending" />
+                            <RadioMenuFlyoutItem
+                                x:Name="SortDescendingItem"
+                                Click="OnSortOptionClick"
+                                GroupName="SortDirectionGroup"
+                                IsChecked="True"
+                                Text="Descending" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
+        </Grid>
+
+        <!-- Project Count Summary -->
+        <TextBlock
+            x:Name="SummaryTextBlock"
+            Grid.Row="2"
+            Margin="0,0,0,12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}" />
+
+        <!-- WinUI 3 Elevated Card Container Background (PowerToys Hosts File Editor Style) -->
+        <Border
+            Grid.Row="3"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}"
+            Padding="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Column Header Row -->
+                <Grid
+                    Padding="24,6,24,6"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="0,0,0,1"
+                    ContextFlyout="{StaticResource DisplayOptionsMenuFlyout}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="HeaderCol0" Width="36" />
+                        <ColumnDefinition x:Name="HeaderCol1" Width="36" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="HeaderCol3" Width="140" />
+                        <ColumnDefinition x:Name="HeaderCol4" Width="130" />
+                        <ColumnDefinition x:Name="HeaderCol5" Width="175" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button
+                        x:Name="FavoriteColumnHeaderButton"
+                        Grid.Column="0"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Keep starred on top"
+                        Click="OnKeepStarredColumnHeaderClick"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Keep starred on top"
+                        Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowFavoritesColumnItem.IsChecked), Mode=OneWay}">
+                        <Grid>
+                            <FontIcon
+                                x:Name="FavoriteHeaderIcon"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE734;" />
+                            <FontIcon
+                                x:Name="FilledFavoriteHeaderIcon"
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xE735;"
+                                Visibility="Collapsed" />
+                        </Grid>
+                    </Button>
+
+                    <Button
+                        x:Name="SourceControlColumnHeaderButton"
+                        Grid.Column="1"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Keep source controlled on top"
+                        Click="OnKeepSourceControlColumnHeaderClick"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Keep source controlled on top"
+                        Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowSourceControlColumnItem.IsChecked), Mode=OneWay}">
+                        <FontIcon
+                            x:Name="SourceControlHeaderIcon"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xF003;" />
+                    </Button>
+
+                    <Button
+                        x:Name="NameColumnHeaderButton"
+                        Grid.Column="2"
+                        Grid.ColumnSpan="2"
+                        Margin="-4,0,0,0"
+                        Padding="8,4"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.Name="Sort by Name"
+                        Click="OnNameColumnHeaderClick"
+                        PointerEntered="OnHeaderPointerEntered"
+                        PointerExited="OnHeaderPointerExited"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Name" />
+                            <FontIcon
+                                x:Name="NameSortIcon"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE70D;"
+                                Opacity="0" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button
+                        x:Name="DateModifiedColumnHeaderButton"
+                        Grid.Column="4"
+                        Margin="-8,0,0,0"
+                        Padding="8,4"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.Name="Sort by Date modified"
+                        Click="OnDateModifiedColumnHeaderClick"
+                        PointerEntered="OnHeaderPointerEntered"
+                        PointerExited="OnHeaderPointerExited"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowModifiedColumnItem.IsChecked), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Date modified" />
+                            <FontIcon
+                                x:Name="DateModifiedSortIcon"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE70D;"
+                                Opacity="0" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button
+                        x:Name="EditorVersionColumnHeaderButton"
+                        Grid.Column="5"
+                        Margin="-8,0,0,0"
+                        Padding="8,4"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.Name="Sort by Unity editor"
+                        Click="OnEditorVersionColumnHeaderClick"
+                        PointerEntered="OnHeaderPointerEntered"
+                        PointerExited="OnHeaderPointerExited"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowEditorVersionColumnItem.IsChecked), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Unity editor" />
+                            <FontIcon
+                                x:Name="EditorVersionSortIcon"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE70D;"
+                                Opacity="0" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button
+                        x:Name="PlatformColumnHeaderButton"
+                        Grid.Column="6"
+                        Margin="-8,0,0,0"
+                        Padding="8,4"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.Name="Sort by Platform"
+                        Click="OnPlatformColumnHeaderClick"
+                        PointerEntered="OnHeaderPointerEntered"
+                        PointerExited="OnHeaderPointerExited"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowPlatformColumnItem.IsChecked), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Platform" />
+                            <FontIcon
+                                x:Name="PlatformSortIcon"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE70D;"
+                                Opacity="0" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!-- Loading Indicator -->
+                <StackPanel
+                    x:Name="LoadingPanel"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.LiveSetting="Polite"
+                    Spacing="8"
+                    Visibility="Collapsed">
+                    <ProgressRing
+                        x:Name="LoadingRing"
+                        Width="32"
+                        Height="32"
+                        HorizontalAlignment="Center"
+                        AutomationProperties.Name="Loading projects"
+                        IsActive="False" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="Loading projects..." />
+                </StackPanel>
+
+                <!-- Project List -->
+                <ListView
+                    x:Name="ProjectsListView"
+                    Grid.Row="1"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnProjectItemClick"
+                    KeyDown="OnProjectsListViewKeyDown"
+                    SelectionMode="Single">
+                    <ListView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsStackPanel ItemsUpdatingScrollMode="KeepItemsInView" />
+                        </ItemsPanelTemplate>
+                    </ListView.ItemsPanel>
+                    <ListView.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderContainerStyle>
+                                <Style TargetType="ListViewHeaderItem">
+                                    <Setter Property="CanBeScrollAnchor" Value="True" />
+                                </Style>
+                            </GroupStyle.HeaderContainerStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate x:DataType="local:ProjectGroupViewModel">
+                                    <Grid
+                                        Margin="4,8,4,2"
+                                        Padding="4,4,12,4"
+                                        AutomationProperties.Name="{x:Bind Key, Mode=OneWay}"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{ThemeResource ControlCornerRadius}">
+                                        <Grid.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem
+                                                    Click="OnProjectGroupToggleMenuClick"
+                                                    Text="{x:Bind ToggleLabel, Mode=OneWay}"
+                                                    Tag="{x:Bind}" />
+                                                <MenuFlyoutItem Click="OnExpandAllProjectGroupsClick" Text="Expand all" />
+                                                <MenuFlyoutItem Click="OnCollapseAllProjectGroupsClick" Text="Collapse all" />
+                                            </MenuFlyout>
+                                        </Grid.ContextFlyout>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button
+                                            Width="32"
+                                            Height="32"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.Name="{x:Bind ToggleAutomationName, Mode=OneWay}"
+                                            Click="OnProjectGroupChevronClick"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{x:Bind ToggleLabel, Mode=OneWay}">
+                                            <FontIcon FontSize="12" Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
+                                        </Button>
+
+                                        <Grid
+                                            Grid.Column="1"
+                                            Padding="4,0,0,0"
+                                            VerticalAlignment="Stretch"
+                                            AutomationProperties.HelpText="Double-click to expand or collapse this group."
+                                            DoubleTapped="OnProjectGroupHeaderDoubleTapped"
+                                            Tag="{x:Bind}">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <FontIcon
+                                                    FontSize="14"
+                                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                    Glyph="{x:Bind HeaderGlyph, Mode=OneWay}"
+                                                    Visibility="{x:Bind local:ProjectsPage.HasGlyphToVisibility(HeaderGlyph), Mode=OneWay}" />
+                                                <TextBlock
+                                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                    Text="{x:Bind Key, Mode=OneWay}"
+                                                    VerticalAlignment="Center" />
+                                                <Border
+                                                    Padding="8,2"
+                                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                    CornerRadius="10"
+                                                    VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                                        Text="{x:Bind CountLabel, Mode=OneWay}" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListView.GroupStyle>
+                    <ListView.ItemContainerStyle>
+                        <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="MinHeight" Value="48" />
+                            <Setter Property="Margin" Value="4,1" />
+                            <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:ProjectListItemViewModel">
+                            <Grid
+                                Padding="20,8"
+                                Background="Transparent"
+                                RightTapped="OnItemRightTapped"
+                                AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
+                                <Grid.ContextFlyout>
+                                    <MenuFlyout>
+                                        <!-- Group 1: Opening & Explorer (Unity Hub order) -->
+                                        <MenuFlyoutItem
+                                            Click="OnContextOpenProjectClick"
+                                            KeyboardAcceleratorTextOverride="Enter"
+                                            Text="Open in Unity"
+                                            Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE768;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Click="OnContextOpenFolderClick"
+                                            KeyboardAcceleratorTextOverride="Ctrl+F"
+                                            Text="Show in Explorer"
+                                            Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE8B7;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem Click="OnContextCommandLineArgumentsClick" Text="Add command line arguments..." Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE78B;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSubItem
+                                            x:Name="OpenInIdeSubItem"
+                                            Loaded="OnOpenInIdeSubItemLoaded"
+                                            Text="Open in IDE">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE737;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                        </MenuFlyoutSubItem>
+
+                                        <MenuFlyoutSeparator />
+
+                                        <!-- Group 2: Organization & Templates -->
+                                        <MenuFlyoutItem Click="OnContextManageTagsClick" Text="Manage tags..." Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE8EC;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSubItem
+                                            x:Name="MoveToGroupSubItem"
+                                            Loaded="OnMoveToGroupSubItemLoaded"
+                                            Text="Move to group">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE8B7;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                        </MenuFlyoutSubItem>
+                                        <MenuFlyoutItem Click="OnContextSaveAsTemplateClick" Text="Save project as custom template..." Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xF0E2;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSubItem
+                                            IsEnabled="{x:Bind CanCopyShareLink, Mode=OneWay}"
+                                            Text="Share"
+                                            ToolTipService.ToolTip="{x:Bind CopyShareLinkToolTip, Mode=OneWay}"
+                                            Visibility="{x:Bind IsSourceControlMenuVisible, Mode=OneWay}">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE72D;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                            <MenuFlyoutItem
+                                                Click="OnContextCopyShareLinkClick"
+                                                Text="Copy link"
+                                                Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE8C8;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem
+                                                Click="OnContextShareProjectLinkClick"
+                                                Text="Share"
+                                                Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE72D;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyoutSubItem>
+                                        <MenuFlyoutSubItem Text="Backup &amp; maintenance">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE777;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                            <MenuFlyoutItem Click="OnContextCleanCacheClick" Text="Clean cache &amp; temporary files..." Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE74D;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Click="OnContextBackupProjectClick" Text="Back up project..." Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE753;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Click="OnContextCloneProjectClick" Text="Clone project..." Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE8C8;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Click="OnContextManageBackupsClick" Text="Manage backups..." Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE81C;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyoutSubItem>
+                                        <MenuFlyoutSubItem Text="Advanced launch options">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE78B;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                            <MenuFlyoutItem Click="OnContextOpenTerminalClick" Text="Open in Terminal" Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE756;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSubItem
+                                                x:Name="OpenWithTargetPlatformSubItem"
+                                                Loaded="OnOpenWithTargetPlatformSubItemLoaded"
+                                                Text="Open with Target Platform">
+                                                <MenuFlyoutSubItem.Icon>
+                                                    <FontIcon Glyph="&#xE7F4;" />
+                                                </MenuFlyoutSubItem.Icon>
+                                            </MenuFlyoutSubItem>
+                                            <MenuFlyoutSubItem Text="Launch with preset">
+                                                <MenuFlyoutSubItem.Icon>
+                                                    <FontIcon Glyph="&#xE78B;" />
+                                                </MenuFlyoutSubItem.Icon>
+                                                <MenuFlyoutItem Click="OnContextLaunchPresetClick" Tag="Safe Mode" Text="Safe Mode (-ignorecompilererrors)" />
+                                                <MenuFlyoutItem Click="OnContextLaunchPresetClick" Tag="Vulkan Mode" Text="Vulkan Mode (-force-vulkan)" />
+                                                <MenuFlyoutItem Click="OnContextLaunchPresetClick" Tag="DirectX 12 Mode" Text="DirectX 12 Mode (-force-d3d12)" />
+                                                <MenuFlyoutItem Click="OnContextLaunchPresetClick" Tag="Headless Server" Text="Headless Server (-batchmode -nographics)" />
+                                                <MenuFlyoutItem Click="OnContextLaunchPresetClick" Tag="Profiler Mode" Text="Profiler Mode (-profile-editor)" />
+                                            </MenuFlyoutSubItem>
+                                        </MenuFlyoutSubItem>
+
+                                        <MenuFlyoutSeparator Visibility="{x:Bind IsSourceControlMenuVisible, Mode=OneWay}" />
+
+                                        <!-- Group 3: Source Control -->
+                                        <MenuFlyoutItem
+                                            Click="OnContextConnectSourceControlClick"
+                                            IsEnabled="{x:Bind IsConnectSourceControlMenuEnabled, Mode=OneWay}"
+                                            Text="{x:Bind ConnectSourceControlMenuText, Mode=OneWay}"
+                                            Visibility="{x:Bind IsSourceControlMenuVisible, Mode=OneWay}"
+                                            Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="{x:Bind ConnectSourceControlMenuIconGlyph, Mode=OneWay}" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+
+                                        <MenuFlyoutSeparator />
+
+                                        <!-- Group 4: Path & Destructive (Unity Hub bottom order) -->
+                                        <MenuFlyoutItem
+                                            Click="OnContextCopyPathClick"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+C"
+                                            Text="Copy folder path"
+                                            Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE8C8;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem Click="OnContextRenameProjectClick" Text="Rename" Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE8AC;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Click="OnContextRemoveProjectClick"
+                                            KeyboardAcceleratorTextOverride="Del"
+                                            Text="Remove from list"
+                                            Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE74D;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Grid.ContextFlyout>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{x:Bind Column0Width, Mode=OneWay}" />
+                                    <ColumnDefinition Width="{x:Bind Column1Width, Mode=OneWay}" />
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="{x:Bind Column3Width, Mode=OneWay}" />
+                                    <ColumnDefinition Width="{x:Bind Column4Width, Mode=OneWay}" />
+                                    <ColumnDefinition Width="{x:Bind Column5Width, Mode=OneWay}" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Star (Favorite Toggle) -->
+                                <Button
+                                    Grid.Column="0"
+                                    Width="28"
+                                    Height="28"
+                                    Padding="0"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Toggle favorite"
+                                    Click="OnToggleFavoriteClick"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Tag="{x:Bind}"
+                                    ToolTipService.ToolTip="Toggle favorite"
+                                    Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsFavoriteColumnVisible), Mode=OneWay}">
+                                    <FontIcon
+                                        FontSize="14"
+                                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                        Glyph="{x:Bind FavoriteGlyph, Mode=OneWay}" />
+                                </Button>
+
+                                <!-- Source Control Indicator -->
+                                <FontIcon
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="{x:Bind SourceControlIconGlyph, Mode=OneWay}"
+                                    Opacity="{x:Bind SourceControlIconOpacity, Mode=OneWay}"
+                                    ToolTipService.ToolTip="{x:Bind SourceControlToolTip, Mode=OneWay}"
+                                    Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsSourceControlColumnVisible), Mode=OneWay}" />
+
+                                <!-- Folder Icon -->
+                                <FontIcon
+                                    Grid.Column="2"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="16"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Glyph="&#xE8B7;" />
+
+                                <!-- Name + Path -->
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="1">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            Style="{StaticResource BodyTextBlockStyle}"
+                                            Text="{x:Bind Title, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis" />
+
+                                         <!-- Tag Badge -->
+                                         <Border
+                                             Height="18"
+                                             Padding="6,0"
+                                             VerticalAlignment="Center"
+                                             Background="{x:Bind PrimaryTagTintBrush, Mode=OneWay}"
+                                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                             BorderThickness="1"
+                                             CornerRadius="{ThemeResource ControlCornerRadius}"
+                                             ToolTipService.ToolTip="{x:Bind TagsToolTip, Mode=OneWay}"
+                                             Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsTagBadgeVisible), Mode=OneWay}">
+                                             <StackPanel VerticalAlignment="Center" Orientation="Horizontal" Spacing="4">
+                                                 <Ellipse
+                                                     Width="8"
+                                                     Height="8"
+                                                     VerticalAlignment="Center"
+                                                     Fill="{x:Bind PrimaryTagColorBrush, Mode=OneWay}" />
+                                                 <TextBlock
+                                                     VerticalAlignment="Center"
+                                                     FontSize="11"
+                                                     MaxWidth="130"
+                                                     TextTrimming="CharacterEllipsis"
+                                                     Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                     Text="{x:Bind TagBadgeLabel, Mode=OneWay}" />
+                                             </StackPanel>
+                                         </Border>
+
+                                        <!-- Git Branch Badge -->
+                                        <Border
+                                            Height="18"
+                                            Padding="6,0"
+                                            VerticalAlignment="Center"
+                                            Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}"
+                                            ToolTipService.ToolTip="{x:Bind SourceControlToolTip, Mode=OneWay}"
+                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsSourceControlBadgeVisible), Mode=OneWay}">
+                                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal" Spacing="4">
+                                                <FontIcon
+                                                    FontSize="10"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Glyph="{x:Bind SourceControlIconGlyph, Mode=OneWay}" />
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Text="{x:Bind SourceControlLabel, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Editor Missing Caution Badge -->
+                                        <Border
+                                            Height="18"
+                                            Padding="6,0"
+                                            VerticalAlignment="Center"
+                                            Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}"
+                                            ToolTipService.ToolTip="Unity Editor version is not installed"
+                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsEditorMissing), Mode=OneWay}">
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                FontSize="10"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                Text="Editor missing" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Path, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+
+                                <!-- Date Modified -->
+                                <TextBlock
+                                    Grid.Column="4"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="{x:Bind RelativeLastModifiedLabel, Mode=OneWay}"
+                                    ToolTipService.ToolTip="{x:Bind LastModifiedLabel, Mode=OneWay}"
+                                    Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsModifiedColumnVisible), Mode=OneWay}" />
+
+                                <!-- Unity Editor Version ComboBox -->
+                                <ComboBox
+                                    Grid.Column="5"
+                                    Width="120"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Select Unity editor version"
+                                    ItemsSource="{x:Bind InstalledEditorVersions, Mode=OneWay}"
+                                    SelectedItem="{x:Bind SelectedEditorVersion, Mode=OneWay}"
+                                    SelectionChanged="OnEditorVersionChanged"
+                                    Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsEditorVersionColumnVisible), Mode=OneWay}" />
+
+                                <!-- Target Platform ComboBox -->
+                                <ComboBox
+                                    Grid.Column="6"
+                                    Width="165"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Select target platform"
+                                    ItemsSource="{x:Bind AvailableTargetPlatforms, Mode=OneWay}"
+                                    SelectedItem="{x:Bind SelectedTargetPlatform, Mode=OneWay}"
+                                    SelectionChanged="OnTargetPlatformChanged"
+                                    Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsPlatformColumnVisible), Mode=OneWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:TargetPlatformInfo">
+                                            <TextBlock Text="{x:Bind DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <!-- Empty State Display -->
+                <StackPanel
+                    x:Name="EmptyStatePanel"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="12"
+                    Visibility="Collapsed">
+                    <FontIcon
+                        HorizontalAlignment="Center"
+                        FontSize="40"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Glyph="&#xE8B7;" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="No projects found" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Try adjusting your search query or refreshing your recent projects list." />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Top Floating Overlay InfoBar -->
+        <InfoBar
+            x:Name="StatusInfoBar"
+            Grid.Row="0"
+            Grid.RowSpan="5"
+            Margin="0,0,0,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Canvas.ZIndex="99"
+            IsClosable="True"
+            IsOpen="False" />
+
+    </Grid>
+</Page>

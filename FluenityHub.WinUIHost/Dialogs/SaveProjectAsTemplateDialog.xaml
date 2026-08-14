@@ -1,0 +1,672 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.SaveProjectAsTemplateDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Save project as custom template"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="Next"
+    SecondaryButtonClick="OnSecondaryButtonClick"
+    SecondaryButtonText="Back"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">640</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid
+        Width="560"
+        MaxWidth="560"
+        HorizontalAlignment="Stretch"
+        RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Subtitle Description -->
+        <TextBlock
+            x:Name="DialogSubtitleTextBlock"
+            Grid.Row="0"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="Save an existing project as a custom template to reuse its setup and speed up future project creation."
+            TextWrapping="Wrap" />
+
+        <!-- Main Scrollable Content Area -->
+        <ScrollViewer
+            x:Name="DialogContentScrollViewer"
+            Grid.Row="1"
+            MaxHeight="520"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16">
+
+                <!-- STEP 1: TEMPLATE DETAILS -->
+                <StackPanel x:Name="Step1Panel" Spacing="14">
+
+                    <!-- Source Project Picker (If not preselected) -->
+                    <StackPanel x:Name="SourceProjectPickerSection" Spacing="6">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
+                            <Run Text="Source project " />
+                            <Run Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </TextBlock>
+                        <ComboBox
+                            x:Name="SourceProjectComboBox"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="Source project"
+                            IsEditable="True"
+                            IsTextSearchEnabled="True"
+                            PlaceholderText="Search or select a project"
+                            SelectionChanged="OnSourceProjectSelectionChanged"
+                            TextSubmitted="OnSourceProjectTextSubmitted" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Only projects that appear in your Hub project list are shown. Projects missing on disk cannot be selected."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- Name * -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
+                            <Run Text="Name " />
+                            <Run Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </TextBlock>
+                        <TextBox
+                            x:Name="TemplateNameTextBox"
+                            AutomationProperties.Name="Template Name"
+                            PlaceholderText="My project"
+                            TextChanged="OnTemplateNameTextChanged" />
+                        <TextBlock
+                            x:Name="TemplateNameValidationTextBlock"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="A template with this name already exists. Choose a different name or update your templates location in Settings."
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                    </StackPanel>
+
+                    <!-- Description * -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
+                            <Run Text="Description " />
+                            <Run Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </TextBlock>
+                        <TextBox
+                            x:Name="TemplateDescriptionTextBox"
+                            Height="72"
+                            AcceptsReturn="True"
+                            AutomationProperties.Name="Template Description"
+                            PlaceholderText="Describe what this template contains..."
+                            TextChanged="OnInputFieldsChanged"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- Version * -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
+                            <Run Text="Version " />
+                            <Run Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </TextBlock>
+                        <TextBox
+                            x:Name="TemplateVersionTextBox"
+                            AutomationProperties.Name="Template Version"
+                            PlaceholderText="1.0.0"
+                            Text="1.0.0"
+                            TextChanged="OnInputFieldsChanged" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Enter a valid semantic version (e.g., 1.0.0, 2.1.3-alpha.1)" />
+                    </StackPanel>
+
+                    <!-- Category -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="Category" />
+                        <TextBox
+                            x:Name="TemplateCategoryTextBox"
+                            AutomationProperties.Name="Template Category"
+                            PlaceholderText="3D, 2D, Mobile..." />
+                    </StackPanel>
+
+                    <!-- Minimum Editor Version -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}">
+                            <Run Text="Editor version " />
+                            <Run Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </TextBlock>
+                        <TextBox
+                            x:Name="EditorVersionTextBox"
+                            AutomationProperties.Name="Editor Version"
+                            IsReadOnly="True"
+                            PlaceholderText="Select source project to auto-fill" />
+                        <StackPanel
+                            x:Name="EditorMissingWarningPanel"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            Visibility="Collapsed">
+                            <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCautionBrush}" Glyph="&#xE7BA;" />
+                            <TextBlock
+                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="This Editor version is not installed. Install it to create a project from this template."
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Image Dropzone Area -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="Image" />
+                        <Border
+                            x:Name="CoverImageDropZone"
+                            Padding="12"
+                            AllowDrop="True"
+                            Background="{ThemeResource ControlAltFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{ThemeResource ControlCornerRadius}"
+                            DragOver="OnCoverImageDragOver"
+                            Drop="OnCoverImageDrop">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <FontIcon
+                                    x:Name="CoverImagePlaceholderIcon"
+                                    Grid.Column="0"
+                                    FontSize="24"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Glyph="&#xE8E5;" />
+
+                                <Button
+                                    x:Name="CoverImagePreviewContainer"
+                                    Grid.Column="0"
+                                    Width="36"
+                                    Height="36"
+                                    Padding="0"
+                                    AutomationProperties.Name="Open template image"
+                                    Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                    BorderThickness="0"
+                                    Click="OnOpenCoverImageClick"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                                    ToolTipService.ToolTip="Open image"
+                                    Visibility="Collapsed">
+                                    <Image
+                                        x:Name="CoverImagePreview"
+                                        Stretch="UniformToFill" />
+                                </Button>
+
+                                <Button
+                                    x:Name="BrowseCoverImageButton"
+                                    Grid.Column="1"
+                                    AllowFocusOnInteraction="False"
+                                    Click="OnBrowseCoverImageClick"
+                                    AutomationProperties.Name="Browse Files"
+                                    Content="Browse Files" />
+
+                                <TextBlock
+                                    x:Name="ImageDropText"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="or drop files here"
+                                    TextTrimming="CharacterEllipsis" />
+
+                                <Button
+                                    x:Name="RemoveCoverImageButton"
+                                    Grid.Column="3"
+                                    Width="32"
+                                    Height="32"
+                                    Padding="0"
+                                    AutomationProperties.Name="Remove template image"
+                                    Click="OnRemoveCoverImageClick"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    ToolTipService.ToolTip="Remove image"
+                                    Visibility="Collapsed">
+                                    <FontIcon FontSize="12" Glyph="&#xE74D;" />
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Keep project settings CheckBox -->
+                    <StackPanel
+                        x:Name="ProjectSettingsOptionPanel"
+                        Orientation="Horizontal"
+                        Spacing="6">
+                        <CheckBox
+                            x:Name="KeepProjectSettingsCheckBox"
+                            Content="Keep project settings"
+                            IsChecked="True" />
+                        <Button
+                            Width="18"
+                            Height="18"
+                            Padding="0"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="If the template requires specific settings to work well out of the box, or if you want the user to adjust the settings themselves.">
+                            <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Advanced template options Expander -->
+                    <Expander
+                        x:Name="AdvancedTemplateOptionsExpander"
+                        AllowFocusOnInteraction="False"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Collapsed="OnAdvancedExpanderCollapsed"
+                        Expanding="OnAdvancedExpanderExpanding"
+                        Header="Advanced template options">
+                        <StackPanel Spacing="12">
+                            <!-- Root files to include -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Root files to include" />
+                                <ComboBox
+                                    x:Name="RootFilesComboBox"
+                                    HorizontalAlignment="Stretch"
+                                    AutomationProperties.Name="Select files to include"
+                                    PlaceholderText="Select files to include"
+                                    SelectionChanged="OnRootFilesComboBoxSelectionChanged" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Select files from the source project's root to bundle with the template." />
+
+                                <!-- Selected Root Files Tags -->
+                                <ListView
+                                    x:Name="SelectedRootFilesListView"
+                                    MaxHeight="100"
+                                    Margin="0,4,0,0"
+                                    HorizontalContentAlignment="Stretch"
+                                    SelectionMode="None"
+                                    Visibility="Collapsed">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Padding" Value="0" />
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid
+                                                Padding="8,4"
+                                                ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    VerticalAlignment="Center"
+                                                    Text="{Binding}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <Button
+                                                    Grid.Column="1"
+                                                    Width="28"
+                                                    Height="28"
+                                                    Padding="0"
+                                                    AutomationProperties.Name="Remove included root file"
+                                                    Click="OnRemoveRootFileClick"
+                                                    Style="{StaticResource SubtleButtonStyle}"
+                                                    Tag="{Binding}"
+                                                    ToolTipService.ToolTip="Remove file">
+                                                    <FontIcon FontSize="11" Glyph="&#xE711;" />
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </StackPanel>
+
+                            <!-- Replace source project name with placeholder -->
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox
+                                        x:Name="ReplaceNamePlaceholderCheckBox"
+                                        Content="Replace source project name with placeholder"
+                                        IsEnabled="False" />
+                                    <Button
+                                        x:Name="ReplaceNamePlaceholderHelpButton"
+                                        Width="18"
+                                        Height="18"
+                                        Padding="0"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        ToolTipService.ToolTip="When the template is saved, occurrences of &quot;my project&quot; in the included root files are replaced with %PROJECT_NAME%. When a new project is created from this template, %PROJECT_NAME% is replaced with the new project's name.">
+                                        <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="PlaceholderHelpText"
+                                    Margin="28,0,0,0"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Add at least one root file above to enable substitution." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+
+                </StackPanel>
+
+                <!-- STEP 2: SOURCE CONTROL (OPTIONAL) -->
+                <StackPanel
+                    x:Name="Step2Panel"
+                    Spacing="14"
+                    Visibility="Collapsed">
+
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Use source control to share custom project templates with your team, making collaboration and consistency effortless."
+                        TextWrapping="Wrap" />
+
+                    <!-- Source Control Provider -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Source control provider" />
+                        <ComboBox
+                            x:Name="SourceControlProviderComboBox"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="Source control provider"
+                            SelectedIndex="0"
+                            SelectionChanged="OnSourceControlProviderSelectionChanged">
+                            <ComboBoxItem Content="Select none" Tag="none" />
+                            <ComboBoxItem Content="GitHub" Tag="github" />
+                            <ComboBoxItem Content="GitLab" Tag="gitlab" />
+                            <ComboBoxItem Content="Git" Tag="git" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Personal Access Token Section (GitHub / GitLab) -->
+                    <StackPanel x:Name="TokenSectionStackPanel" Spacing="6" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Personal Access Token" />
+                            <Button
+                                Width="18"
+                                Height="18"
+                                Padding="0"
+                                Style="{StaticResource SubtleButtonStyle}"
+                                ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;Required permissions: repo (GitHub) or api (GitLab).">
+                                <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                            </Button>
+                            <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </StackPanel>
+
+                        <Grid>
+                            <!-- Unlinked Panel -->
+                            <Grid
+                                x:Name="TokenUnlinkedPanel"
+                                ColumnDefinitions="*,Auto,Auto"
+                                ColumnSpacing="8"
+                                Visibility="Visible">
+                                <PasswordBox
+                                    x:Name="TokenPasswordBox"
+                                    Grid.Column="0"
+                                    AutomationProperties.Name="Personal Access Token"
+                                    PasswordChar="•"
+                                    PlaceholderText="Enter your personal access token"
+                                    PasswordChanged="OnTokenPasswordChanged" />
+
+                                <Button
+                                    Grid.Column="1"
+                                    Click="OnGetTokenClick"
+                                    Style="{StaticResource SubtleButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="Get a token" />
+                                        <FontIcon FontSize="10" Glyph="&#xE8A7;" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Grid Grid.Column="2">
+                                    <Button
+                                        x:Name="AuthorizeButton"
+                                        AutomationProperties.Name="Authorize source control"
+                                        Click="OnAuthorizeTokenClick"
+                                        Content="Authorize"
+                                        IsEnabled="False"
+                                        Style="{StaticResource AccentButtonStyle}" />
+                                    <Grid
+                                        x:Name="AuthorizeLoadingPanel"
+                                        IsHitTestVisible="False"
+                                        Visibility="Collapsed">
+                                        <Button
+                                            AutomationProperties.Name="Authorizing source control"
+                                            IsEnabled="False"
+                                            IsHitTestVisible="False"
+                                            Style="{StaticResource AccentButtonStyle}">
+                                            <Grid ColumnDefinitions="20,Auto" ColumnSpacing="6">
+                                                <Border Width="20" Height="20" />
+                                                <TextBlock Grid.Column="1" Text="Authorizing..." />
+                                            </Grid>
+                                        </Button>
+                                        <ProgressRing
+                                            x:Name="AuthorizeProgressRing"
+                                            Width="20"
+                                            Height="20"
+                                            Margin="11,0,0,0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.Name="Authorizing source control"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            IsActive="False" />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+
+                            <!-- Linked Panel (Connected State) -->
+                            <Grid
+                                x:Name="TokenLinkedPanel"
+                                ColumnDefinitions="*,Auto"
+                                HorizontalAlignment="Stretch"
+                                Visibility="Collapsed">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontSize="14" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Glyph="&#xE73E;" />
+                                    <TextBlock
+                                        x:Name="TokenUserTextBlock"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                                        Text="Connected" />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    Click="OnDisconnectTokenClick"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    ToolTipService.ToolTip="Remove or change token">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE711;" />
+                                        <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="Disconnect" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="CustomGitRemoteStackPanel"
+                        Spacing="6"
+                        Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Remote URL (optional)" />
+                        <TextBox
+                            x:Name="CustomGitRemoteTextBox"
+                            AutomationProperties.Name="Git remote URL"
+                            PlaceholderText="git@host:user/repository.git or https://..."
+                            TextChanged="OnInputFieldsChanged" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Leave blank to create a local Git repository without a remote." />
+                    </StackPanel>
+
+                    <!-- Repository Details (shown when provider != none) -->
+                    <StackPanel x:Name="RepositoryDetailsStackPanel" Spacing="12" Visibility="Collapsed">
+
+                        <!-- Repository Name -->
+                        <StackPanel x:Name="HostedRepositoryNameStackPanel" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Repository name" />
+                                <Button
+                                    Width="18"
+                                    Height="18"
+                                    Padding="0"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    ToolTipService.ToolTip="The name for your remote repository on GitHub or GitLab.">
+                                    <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                </Button>
+                                <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                            </StackPanel>
+                            <TextBox
+                                x:Name="RepositoryNameTextBox"
+                                AutomationProperties.Name="Repository name"
+                                PlaceholderText="My project"
+                                TextChanged="OnRepositoryNameChanged" />
+                            <TextBlock
+                                x:Name="SlugPreviewTextBlock"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Slug preview: my-project" />
+                        </StackPanel>
+
+                        <!-- Additional Configuration Expander -->
+                        <Expander
+                            x:Name="SourceControlConfigurationExpander"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Header="Additional configuration"
+                            IsExpanded="False">
+                            <StackPanel Spacing="12">
+
+                                <!-- Owner -->
+                                <StackPanel x:Name="HostedOwnerStackPanel" Spacing="4">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Owner" />
+                                    <ComboBox
+                                        x:Name="OwnerComboBox"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="Repository owner" />
+                                </StackPanel>
+
+                                <!-- Visibility Level -->
+                                <StackPanel x:Name="HostedVisibilityStackPanel" Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Visibility level" />
+                                        <Button
+                                            Width="18"
+                                            Height="18"
+                                            Padding="0"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            ToolTipService.ToolTip="Public: Anyone can see this repository.&#x0a;Private: You choose who can see this repository.">
+                                            <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                        </Button>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                        <RadioButton x:Name="PrivateVisibilityRadioButton" IsChecked="True">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon FontSize="12" Glyph="&#xE72E;" />
+                                                <TextBlock Text="Private" />
+                                            </StackPanel>
+                                        </RadioButton>
+                                        <RadioButton x:Name="PublicVisibilityRadioButton" IsChecked="False">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon FontSize="12" Glyph="&#xE774;" />
+                                                <TextBlock Text="Public" />
+                                            </StackPanel>
+                                        </RadioButton>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Repository Description -->
+                                <StackPanel x:Name="HostedDescriptionStackPanel" Spacing="4">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Repository description" />
+                                    <TextBox
+                                        x:Name="RepositoryDescriptionTextBox"
+                                        Height="60"
+                                        AcceptsReturn="True"
+                                        AutomationProperties.Name="Repository description"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <!-- Default Branch Name -->
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Default branch name" />
+                                        <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                                    </StackPanel>
+                                    <TextBox
+                                        x:Name="DefaultBranchTextBox"
+                                        AutomationProperties.Name="Default branch name"
+                                        Text="main"
+                                        TextChanged="OnInputFieldsChanged" />
+                                </StackPanel>
+
+                                <!-- Enable Git LFS -->
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox
+                                        x:Name="EnableGitLfsCheckBox"
+                                        Content="Enable Git LFS"
+                                        IsChecked="True" />
+                                    <Button
+                                        Width="18"
+                                        Height="18"
+                                        Padding="0"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        ToolTipService.ToolTip="Track large binary asset files (textures, audio, models) with Git LFS.">
+                                        <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                                    </Button>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Banners -->
+        <StackPanel Grid.Row="2" Spacing="8">
+            <StackPanel
+                x:Name="SavingProgressPanel"
+                AutomationProperties.LiveSetting="Polite"
+                Spacing="4"
+                Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing
+                        x:Name="SavingProgressRing"
+                        Width="20"
+                        Height="20"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Creating template"
+                        IsActive="False" />
+                    <TextBlock
+                        x:Name="SavingTitleTextBlock"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Creating template..." />
+                </StackPanel>
+                <TextBlock
+                    x:Name="SavingStatusTextBlock"
+                    Margin="28,0,0,0"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Packaging project assets &amp; settings into custom template storage."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="ErrorBanner"
+                IsOpen="False"
+                Severity="Error" />
+        </StackPanel>
+
+    </Grid>
+</ContentDialog>

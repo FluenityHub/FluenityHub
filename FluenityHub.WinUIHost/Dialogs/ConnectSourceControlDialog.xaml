@@ -1,0 +1,311 @@
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.ConnectSourceControlDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Connect to source control"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonText="Connect"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ScrollViewer
+        MaxHeight="540"
+        HorizontalScrollBarVisibility="Disabled"
+        VerticalScrollBarVisibility="Auto">
+        <StackPanel MinWidth="460" HorizontalAlignment="Stretch" Spacing="16">
+            <!-- Header subtitle -->
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Track changes to your project and collaborate with teammates"
+                TextWrapping="Wrap" />
+
+            <!-- Source control provider -->
+            <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Source control provider" />
+                    <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                </StackPanel>
+                <ComboBox
+                    x:Name="ProviderComboBox"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Source control provider"
+                    SelectedIndex="0"
+                    SelectionChanged="OnProviderSelectionChanged">
+                    <ComboBoxItem Content="GitHub" Tag="github" />
+                    <ComboBoxItem Content="GitLab" Tag="gitlab" />
+                    <ComboBoxItem Content="Git" Tag="git" />
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Personal Access Token (for GitHub & GitLab) -->
+            <StackPanel x:Name="TokenSectionStackPanel" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Personal Access Token" />
+                    <Button
+                        x:Name="TokenInfoButton"
+                        Width="18"
+                        Height="18"
+                        Padding="0"
+                        AutomationProperties.Name="Token Info"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;• Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;• Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                        <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                    </Button>
+                    <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                </StackPanel>
+                <Grid>
+                    <!-- Unlinked Panel -->
+                    <Grid
+                        x:Name="TokenUnlinkedPanel"
+                        ColumnDefinitions="*,Auto,Auto"
+                        ColumnSpacing="8"
+                        Visibility="Visible">
+                        <PasswordBox
+                            x:Name="TokenPasswordBox"
+                            Grid.Column="0"
+                            AutomationProperties.Name="Personal Access Token"
+                            PasswordChanged="OnTokenPasswordChanged"
+                            PasswordChar="•"
+                            PlaceholderText="Enter your personal access token" />
+
+                        <Button
+                            Grid.Column="1"
+                            Click="OnGetTokenClick"
+                            Style="{StaticResource SubtleButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="Get a token" />
+                                <FontIcon FontSize="10" Glyph="&#xE8A7;" />
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Column="2">
+                            <Button
+                                x:Name="AuthorizeButton"
+                                AutomationProperties.Name="Authorize source control"
+                                Click="OnAuthorizeClick"
+                                Content="Authorize"
+                                IsEnabled="False"
+                                Style="{StaticResource AccentButtonStyle}" />
+                            <Grid
+                                x:Name="AuthorizeLoadingPanel"
+                                IsHitTestVisible="False"
+                                Visibility="Collapsed">
+                                <Button
+                                    AutomationProperties.Name="Authorizing source control"
+                                    IsEnabled="False"
+                                    IsHitTestVisible="False"
+                                    Style="{StaticResource AccentButtonStyle}">
+                                    <Grid ColumnDefinitions="20,Auto" ColumnSpacing="6">
+                                        <Border Width="20" Height="20" />
+                                        <TextBlock Grid.Column="1" Text="Authorizing..." />
+                                    </Grid>
+                                </Button>
+                                <ProgressRing
+                                    x:Name="AuthorizeProgressRing"
+                                    Width="20"
+                                    Height="20"
+                                    Margin="11,0,0,0"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Authorizing source control"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    IsActive="False" />
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Linked Panel (Connected State) -->
+                    <Grid
+                        x:Name="TokenLinkedPanel"
+                        ColumnDefinitions="*,Auto"
+                        HorizontalAlignment="Stretch"
+                        Visibility="Collapsed">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon FontSize="14" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Glyph="&#xE73E;" />
+                            <TextBlock
+                                x:Name="TokenUserTextBlock"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Connected" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            Click="OnDisconnectTokenClick"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="Remove or change token">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE711;" />
+                                <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="Disconnect" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </StackPanel>
+
+            <!-- Custom Remote URL (for generic Git / Bitbucket / Azure DevOps / SSH) -->
+            <StackPanel
+                x:Name="CustomRemoteUrlStackPanel"
+                Spacing="6"
+                Visibility="Collapsed">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Remote URL (optional)" />
+                <TextBox
+                    x:Name="CustomRemoteUrlTextBox"
+                    AutomationProperties.Name="Git Remote URL"
+                    PlaceholderText="git@host:user/repository.git or https://..."
+                    TextChanged="OnCustomRemoteUrlTextChanged" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Leave blank if creating a local Git repository without a remote." />
+            </StackPanel>
+
+            <!-- Repository name -->
+            <StackPanel x:Name="HostedRepositoryStackPanel" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Repository name" />
+                    <Button
+                        x:Name="RepoNameInfoButton"
+                        Width="18"
+                        Height="18"
+                        Padding="0"
+                        AutomationProperties.Name="Repository name info"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Name of the repository to create and sync the workspace to. Maximum 100 characters.">
+                        <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                    </Button>
+                    <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                </StackPanel>
+                <TextBox
+                    x:Name="RepoNameTextBox"
+                    AutomationProperties.Name="Repository name"
+                    PlaceholderText="My project"
+                    TextChanged="OnRepoNameTextChanged" />
+                <TextBlock
+                    x:Name="SlugPreviewTextBlock"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Slug preview: my-project" />
+            </StackPanel>
+
+            <!-- Additional configuration Expander -->
+            <Expander
+                x:Name="AdditionalConfigurationExpander"
+                Header="Additional configuration"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch">
+                <StackPanel Margin="0,8,0,0" Spacing="12">
+                    <!-- Owner -->
+                    <StackPanel x:Name="OwnerStackPanel" Spacing="4">
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Owner" />
+                        <ComboBox
+                            x:Name="OwnerComboBox"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="Owner" />
+                    </StackPanel>
+
+                    <!-- Visibility level -->
+                    <StackPanel x:Name="VisibilityStackPanel" Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Visibility level" />
+                            <Button
+                                Width="18"
+                                Height="18"
+                                Padding="0"
+                                AutomationProperties.Name="Visibility level info"
+                                Style="{StaticResource SubtleButtonStyle}"
+                                ToolTipService.ToolTip="Choose who can see and commit to this repository.&#x0a;&#x0a;Public: Anyone on the internet can see this repository. You choose who can commit.&#x0a;&#x0a;Private: You choose who can see and commit to this repository.">
+                                <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="20">
+                            <RadioButton
+                                x:Name="PrivateVisibilityRadioButton"
+                                IsChecked="True">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE72E;" />
+                                    <TextBlock Text="Private" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton
+                                x:Name="PublicVisibilityRadioButton"
+                                IsChecked="False">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE774;" />
+                                    <TextBlock Text="Public" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Repository description -->
+                    <StackPanel x:Name="DescriptionStackPanel" Spacing="4">
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Repository description" />
+                        <TextBox
+                            x:Name="RepoDescriptionTextBox"
+                            Height="60"
+                            AutomationProperties.Name="Repository description"
+                            AcceptsReturn="True"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- Default branch name -->
+                    <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Default branch name" />
+                            <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />
+                        </StackPanel>
+                        <TextBox
+                            x:Name="BranchNameTextBox"
+                            AutomationProperties.Name="Default branch name"
+                            Text="main" />
+                    </StackPanel>
+
+                    <!-- Enable Git LFS -->
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <CheckBox
+                            x:Name="EnableGitLfsCheckBox"
+                            Content="Enable Git LFS"
+                            IsChecked="True" />
+                        <Button
+                            Width="18"
+                            Height="18"
+                            Padding="0"
+                            AutomationProperties.Name="Enable Git LFS info"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="Git Large File Storage (LFS) handles large files efficiently by storing them outside the repository. Recommended for Unity projects.">
+                            <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- Push all current changes to remote -->
+            <StackPanel x:Name="PushChangesStackPanel" Orientation="Horizontal" Spacing="4">
+                <CheckBox
+                    x:Name="PushChangesCheckBox"
+                    Content="Push all current changes to remote"
+                    IsChecked="True" />
+                <Button
+                    Width="18"
+                    Height="18"
+                    Padding="0"
+                    AutomationProperties.Name="Push changes info"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="When checked: Commits all current changes and pushes them to the remote repository.&#x0a;&#x0a;When unchecked: Only connects to the remote repository without committing or pushing any changes.">
+                    <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
+                </Button>
+            </StackPanel>
+
+            <!-- Global Error / Status Display -->
+            <InfoBar
+                x:Name="DialogInfoBar"
+                IsOpen="False"
+                Severity="Error" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

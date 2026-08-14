@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.CommandLineArgumentsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Command line arguments"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="Save"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <StackPanel MinWidth="480" HorizontalAlignment="Stretch" Spacing="16">
+        <!-- Project Info Subtitle Header -->
+        <StackPanel Spacing="2">
+            <TextBlock
+                x:Name="ProjectTitleTextBlock"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Project Title" />
+            <TextBlock
+                x:Name="EditorVersionTextBlock"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="6000.0.0f1" />
+        </StackPanel>
+
+        <!-- Command Line Arguments Section -->
+        <StackPanel Spacing="8">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" Text="Add command line arguments here" />
+                <DropDownButton
+                    Grid.Column="1"
+                    AutomationProperties.Name="Quick Launch Presets"
+                    Content="Quick Presets">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="PresetsMenuFlyout">
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="" Text="Default (Clear args)" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="-ignorecompilererrors" Text="Safe Mode (-ignorecompilererrors)" />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="-force-vulkan" Text="Vulkan Mode (-force-vulkan)" />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="-force-d3d12" Text="DirectX 12 Mode (-force-d3d12)" />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="-batchmode -nographics" Text="Headless Server (-batchmode -nographics)" />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="-profile-editor" Text="Profiler Mode (-profile-editor)" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </Grid>
+            <TextBox
+                x:Name="ArgumentsTextBox"
+                MinHeight="160"
+                AcceptsReturn="True"
+                AutomationProperties.Name="Add command line arguments here"
+                PlaceholderText="e.g., &quot;-batchmode -logfile&quot;"
+                TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Documentation Link Button -->
+        <HyperlinkButton
+            Padding="0"
+            HorizontalAlignment="Left"
+            AutomationProperties.Name="Command line arguments documentation"
+            Click="OnDocLinkClick">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="Command line arguments documentation" />
+                <FontIcon FontSize="12" Glyph="&#xE8A7;" />
+            </StackPanel>
+        </HyperlinkButton>
+    </StackPanel>
+</ContentDialog>

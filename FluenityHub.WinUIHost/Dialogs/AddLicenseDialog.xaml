@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.AddLicenseDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    Title="Add new license"
+    CloseButtonText="Cancel"
+    Closed="OnDialogClosed"
+    DefaultButton="None"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    SecondaryButtonClick="OnSecondaryButtonClick"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">620</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid Width="572" MaxHeight="520">
+        <StackPanel
+            x:Name="RootPanel"
+            Spacing="12">
+            <StackPanel Spacing="6">
+                <TextBlock
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Activate license" />
+                <StackPanel Spacing="4">
+                    <controls:SettingsCard
+                        x:Name="SerialActionItem"
+                        Click="OnRootActionCardClick"
+                        Description="Enter a serial number to activate an existing Plus or Pro license"
+                        Header="Activate with serial number"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE8D7;}"
+                        IsClickEnabled="True"
+                        Tag="serial" />
+                    <controls:SettingsCard
+                        x:Name="RequestActionItem"
+                        Click="OnRootActionCardClick"
+                        Description="Use Unity's manual activation process for an existing license"
+                        Header="Activate with license request"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE713;}"
+                        IsClickEnabled="True"
+                        Tag="request" />
+                    <controls:SettingsCard
+                        x:Name="PersonalActionItem"
+                        Click="OnRootActionCardClick"
+                        Description="Activate a Personal license to use the free version of Unity Editor"
+                        Header="Get a free Personal license"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE77B;}"
+                        IsClickEnabled="True"
+                        Tag="personal" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Get a new license" />
+                <StackPanel Spacing="4">
+                    <controls:SettingsCard
+                        Click="OnRootActionCardClick"
+                        Description="Compare and purchase Pro and Enterprise plans"
+                        Header="Get a plan for your team"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE719;}"
+                        IsClickEnabled="True"
+                        Tag="team">
+                        <controls:SettingsCard.ActionIcon>
+                            <FontIcon Glyph="&#xE8A7;" />
+                        </controls:SettingsCard.ActionIcon>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard
+                        Click="OnRootActionCardClick"
+                        Description="Eligible students learn for free"
+                        Header="Get a Unity Student license"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE7BE;}"
+                        IsClickEnabled="True"
+                        Tag="student">
+                        <controls:SettingsCard.ActionIcon>
+                            <FontIcon Glyph="&#xE8A7;" />
+                        </controls:SettingsCard.ActionIcon>
+                    </controls:SettingsCard>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <HyperlinkButton Padding="0" Click="OnHelpClick" Content="Help" />
+                <HyperlinkButton Padding="0" Click="OnFaqClick" Content="FAQ" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel
+            x:Name="SerialPanel"
+            Spacing="16"
+            Visibility="Collapsed">
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="Enter a serial number to activate your Plus or Pro license."
+                TextWrapping="Wrap" />
+            <TextBox
+                x:Name="SerialNumberTextBox"
+                AutomationProperties.Name="Serial key"
+                MaxLength="32"
+                TextChanged="OnSerialNumberTextChanged">
+                <TextBox.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Serial Key XX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Text="*" />
+                    </StackPanel>
+                </TextBox.Header>
+            </TextBox>
+            <InfoBar
+                x:Name="SerialStatusInfoBar"
+                IsClosable="True"
+                IsOpen="False" />
+            <StackPanel
+                x:Name="SerialProgressPanel"
+                Orientation="Horizontal"
+                Spacing="8"
+                Visibility="Collapsed">
+                <ProgressRing x:Name="SerialProgressRing" Width="20" Height="20" IsActive="False" />
+                <TextBlock VerticalAlignment="Center" Text="Activating license..." />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <HyperlinkButton Padding="0" Click="OnGetTeamPlanClick" Content="Go to Unity Store" />
+                <HyperlinkButton Padding="0" Click="OnHelpClick" Content="Help" />
+                <HyperlinkButton Padding="0" Click="OnFaqClick" Content="FAQ" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel
+            x:Name="PersonalPanel"
+            Spacing="12"
+            Visibility="Collapsed">
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                TextWrapping="Wrap">
+                <Run Text="You need an active license to use Unity. By agreeing below, you confirm that you are eligible to use Unity Personal. Refer to the " />
+                <Hyperlink Click="OnPersonalTermsLinkClick">Unity Editor Software Terms</Hyperlink>
+                <Run Text=" for details. If your organization uses Unity Pro, Enterprise, or Industry, you are not eligible for Unity Personal." />
+            </TextBlock>
+            <CheckBox
+                x:Name="PersonalTermsCheckBox"
+                AutomationProperties.Name="Confirm Unity Personal eligibility and agree to the terms"
+                Checked="OnPersonalTermsChanged"
+                Content="I confirm that I am eligible and agree to the Unity Editor Software Terms"
+                Unchecked="OnPersonalTermsChanged" />
+            <InfoBar
+                x:Name="PersonalStatusInfoBar"
+                IsClosable="True"
+                IsOpen="False" />
+            <StackPanel
+                x:Name="PersonalProgressPanel"
+                Orientation="Horizontal"
+                Spacing="8"
+                Visibility="Collapsed">
+                <ProgressRing x:Name="PersonalProgressRing" Width="20" Height="20" IsActive="False" />
+                <TextBlock VerticalAlignment="Center" Text="Activating Unity Personal license..." />
+            </StackPanel>
+        </StackPanel>
+
+        <ScrollViewer
+            x:Name="RequestPanel"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto"
+            Visibility="Collapsed">
+            <StackPanel Spacing="12">
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Manual activation uses a request file and a license file supplied by Unity."
+                    TextWrapping="Wrap" />
+
+                <Border
+                    Padding="12"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="28" Height="28" CornerRadius="14" Background="{ThemeResource ControlFillColorDefaultBrush}">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" Text="1" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Create a license request" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Create and save a Unity activation request (.alf) from an installed Unity Editor."
+                                TextWrapping="Wrap" />
+                            <Button
+                                x:Name="CreateLicenseRequestButton"
+                                HorizontalAlignment="Left"
+                                Click="OnCreateLicenseRequestClick"
+                                Content="Create license request"
+                                ToolTipService.ToolTip="Create and save a Unity license request" />
+                            <TextBlock
+                                x:Name="LicenseRequestPathTextBlock"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="No license request has been created yet."
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="Wrap" />
+                            <StackPanel
+                                x:Name="RequestCreationProgressPanel"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                Visibility="Collapsed">
+                                <ProgressRing x:Name="RequestCreationProgressRing" Width="20" Height="20" IsActive="False" />
+                                <TextBlock VerticalAlignment="Center" Text="Creating license request..." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border
+                    Padding="12"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="28" Height="28" CornerRadius="14" Background="{ThemeResource ControlFillColorDefaultBrush}">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" Text="2" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Upload the request" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Upload the .alf file to Unity's manual activation page to generate a license file."
+                                TextWrapping="Wrap" />
+                            <HyperlinkButton
+                                Padding="0"
+                                HorizontalAlignment="Left"
+                                Click="OnOpenManualActivationClick"
+                                Content="Open Unity manual activation" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border
+                    Padding="12"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="28" Height="28" CornerRadius="14" Background="{ThemeResource ControlFillColorDefaultBrush}">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" Text="3" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Activate with the license file" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Upload the license file, then select Activate."
+                                TextWrapping="Wrap" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBox
+                                    x:Name="LicenseFileTextBox"
+                                    AutomationProperties.Name="Unity license file"
+                                    Header="License file"
+                                    IsReadOnly="True"
+                                    PlaceholderText="Choose a .ulf file" />
+                                <Button
+                                    x:Name="BrowseLicenseFileButton"
+                                    Grid.Column="1"
+                                    VerticalAlignment="Bottom"
+                                    AutomationProperties.Name="Choose Unity license file"
+                                    Click="OnBrowseLicenseFileClick"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    ToolTipService.ToolTip="Choose Unity license file">
+                                    <FontIcon FontSize="16" Glyph="&#xE8B7;" />
+                                </Button>
+                            </Grid>
+                            <StackPanel
+                                x:Name="LicenseActivationProgressPanel"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                Visibility="Collapsed">
+                                <ProgressRing x:Name="LicenseActivationProgressRing" Width="20" Height="20" IsActive="False" />
+                                <TextBlock VerticalAlignment="Center" Text="Activating license file..." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <InfoBar
+                    x:Name="RequestStatusInfoBar"
+                    IsClosable="True"
+                    IsOpen="False"
+                    Severity="Informational" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ContentDialog>

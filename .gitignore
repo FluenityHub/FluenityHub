@@ -1,0 +1,53 @@
+# Local SDKs and developer tools
+.dotnet/
+.winapp-tools/
+.tools/
+
+# .NET / Visual Studio
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build, publish, and package output
+artifacts/
+publish/
+AppPackages/
+BundleArtifacts/
+PublishScripts/
+*.msix
+*.msixupload
+*.appx
+*.appxbundle
+*.appxupload
+*.nupkg
+*.snupkg
+
+# Logs and test output
+[Ll]og/
+[Ll]ogs/
+*.log
+*.binlog
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# IDE and analysis caches
+.idea/
+_ReSharper*/
+*.DotSettings.user
+*.dotCover
+
+# Generated files
+Generated Files/
+*_wpftmp.csproj
+project.lock.json
+
+# Keep checked-in publish profiles; exclude user-specific variants.
+*.pubxml.user

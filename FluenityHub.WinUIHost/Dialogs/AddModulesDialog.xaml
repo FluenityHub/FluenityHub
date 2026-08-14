@@ -1,0 +1,453 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.AddModulesDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:FluenityHub_WinUIHost.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:FluenityHub_WinUIHost.Dialogs"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:FluenityHub_WinUIHost.Models"
+    CloseButtonText="Cancel"
+    Closing="OnDialogClosing"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    PrimaryButtonText="Install"
+    SecondaryButtonClick="OnSecondaryButtonClick"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">740</x:Double>
+    </ContentDialog.Resources>
+
+    <Grid MinWidth="600" MinHeight="500">
+        <Grid
+            x:Name="ModuleSelectionPanel"
+            RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="Choose the optional components to add to this Unity Editor installation."
+                TextWrapping="Wrap" />
+
+            <InfoBar
+                x:Name="StatusInfoBar"
+                Grid.Row="1"
+                IsClosable="False"
+                IsOpen="False" />
+
+            <Border
+                Grid.Row="2"
+                Padding="12,10"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon
+                            FontSize="16"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xE7B8;" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Storage" />
+                    </StackPanel>
+
+                    <TextBlock
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}">
+                        <Run Text="Required space: " />
+                        <Run x:Name="RequiredSizeRun" FontWeight="SemiBold" Text="0 bytes" />
+                    </TextBlock>
+
+                    <TextBlock
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}">
+                        <Run Text="Available: " />
+                        <Run x:Name="AvailableSizeRun" FontWeight="SemiBold" Text="—" />
+                    </TextBlock>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="3"
+                MinHeight="280"
+                MaxHeight="520"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid
+                        MinHeight="36"
+                        Padding="12,8"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="124" />
+                            <ColumnDefinition Width="124" />
+                            <ColumnDefinition Width="32" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Module" />
+                        <TextBlock
+                            Grid.Column="1"
+                            HorizontalAlignment="Right"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Download size" />
+                        <TextBlock
+                            Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Size on disk" />
+                    </Grid>
+
+                    <TreeView
+                        x:Name="ModulesTreeView"
+                        Grid.Row="1"
+                        Margin="0"
+                        Padding="0"
+                        AllowDrop="False"
+                        AutomationProperties.Name="Available Unity modules"
+                        CanDragItems="False"
+                        CanReorderItems="False"
+                        DragItemsStarting="OnTreeDragItemsStarting"
+                        SelectionChanged="OnModuleSelectionChanged"
+                        SelectionMode="Multiple">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="MinHeight" Value="36" />
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                        <TreeView.ItemTemplate>
+                            <DataTemplate x:DataType="models:UnityModuleTreeItem">
+                                <controls:ModuleTreeViewItem
+                                    MinHeight="36"
+                                    Margin="0"
+                                    Padding="0"
+                                    AllowDrop="False"
+                                    AutomationProperties.Name="{x:Bind Name}"
+                                    CanDrag="False"
+                                    IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
+                                    IsSelectionEnabled="{x:Bind CanSelect, Mode=OneTime}"
+                                    ItemsSource="{x:Bind Children}">
+                                    <Grid
+                                        MinHeight="36"
+                                        Padding="4,0,12,0"
+                                        Background="Transparent"
+                                        ColumnSpacing="12"
+                                        RightTapped="OnModuleRowRightTapped">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="124" />
+                                            <ColumnDefinition Width="124" />
+                                            <ColumnDefinition Width="32" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel VerticalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                                            <FontIcon
+                                                FontSize="14"
+                                                Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                Glyph="&#xE73E;"
+                                                Visibility="{x:Bind local:AddModulesDialog.BoolToVisibility(IsInstalled), Mode=OneTime}" />
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                FontWeight="{x:Bind local:AddModulesDialog.ModuleFontWeight(IsCategory), Mode=OneTime}"
+                                                Style="{StaticResource BodyTextBlockStyle}"
+                                                Text="{x:Bind Name}"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="NoWrap" />
+                                        </StackPanel>
+
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource BodyTextBlockStyle}"
+                                            Text="{x:Bind DownloadSizeLabel}" />
+                                        <TextBlock
+                                            Grid.Column="2"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource BodyTextBlockStyle}"
+                                            Text="{x:Bind InstalledSizeLabel}" />
+                                        <Button
+                                            x:Name="ModuleActionsButton"
+                                            Grid.Column="3"
+                                            Width="32"
+                                            Height="32"
+                                            Padding="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.Name="{x:Bind local:AddModulesDialog.ModuleActionsAutomationName(Name), Mode=OneTime}"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Visibility="{x:Bind local:AddModulesDialog.BoolToVisibility(ShowMaintenanceActions), Mode=OneTime}">
+                                            <FontIcon FontSize="14" Glyph="&#xE712;" />
+                                            <Button.Flyout>
+                                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <MenuFlyoutItem
+                                                        Click="OnRepairModuleClick"
+                                                        Tag="{x:Bind Module, Mode=OneTime}"
+                                                        Text="Repair">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE90F;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutItem
+                                                        Click="OnRemoveModuleClick"
+                                                        Tag="{x:Bind Module, Mode=OneTime}"
+                                                        Text="Remove"
+                                                        Visibility="{x:Bind local:AddModulesDialog.BoolToVisibility(CanRemove), Mode=OneTime}">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE74D;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                        </Button>
+                                    </Grid>
+                                </controls:ModuleTreeViewItem>
+                            </DataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid
+            x:Name="AgreementPanel"
+            RowSpacing="12"
+            Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock
+                x:Name="AgreementPositionTextBlock"
+                AutomationProperties.LiveSetting="Polite"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Agreement 1 of 1" />
+
+            <InfoBar
+                x:Name="AgreementInfoBar"
+                Grid.Row="1"
+                IsClosable="False"
+                IsOpen="False"
+                Severity="Error"
+                Title="License terms unavailable">
+                <InfoBar.ActionButton>
+                    <Button
+                        Click="OnRetryLicenseClick"
+                        Content="Retry" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
+            <Border
+                Grid.Row="2"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <ScrollViewer
+                    x:Name="AgreementBodyScrollViewer"
+                    AutomationProperties.Name="License agreement"
+                    IsTabStop="True"
+                    MaxHeight="430"
+                    Padding="16"
+                    VerticalScrollBarVisibility="Auto"
+                    VerticalScrollMode="Enabled">
+                    <Grid>
+                        <StackPanel
+                            x:Name="AgreementLoadingPanel"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="12">
+                            <ProgressRing
+                                Width="32"
+                                Height="32"
+                                AutomationProperties.Name="Loading license terms"
+                                IsActive="True" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource BodyTextBlockStyle}"
+                                Text="Loading license terms…" />
+                        </StackPanel>
+
+                        <StackPanel
+                            x:Name="AgreementContentPanel"
+                            Spacing="8"
+                            Visibility="Collapsed">
+                            <TextBlock
+                                x:Name="AgreementBodyTextBlock"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource BodyTextBlockStyle}"
+                                TextWrapping="Wrap" />
+                            <HyperlinkButton
+                                x:Name="AgreementLinkButton"
+                                HorizontalAlignment="Left"
+                                Padding="0"
+                                Visibility="Collapsed" />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <CheckBox
+                x:Name="AgreementCheckBox"
+                Grid.Row="3"
+                AutomationProperties.HelpText="Required before continuing"
+                Checked="OnAgreementAcceptanceChanged"
+                Content="I have read and agree to these terms."
+                Unchecked="OnAgreementAcceptanceChanged" />
+        </Grid>
+
+        <Grid
+            x:Name="ToolSetupPanel"
+            RowSpacing="16"
+            Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Spacing="8">
+                <FontIcon
+                    HorizontalAlignment="Left"
+                    FontSize="32"
+                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                    Glyph="&#xE896;" />
+                <TextBlock
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Install the official Unity command-line tool" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="FluenityHub uses Unity CLI to download and install Editor modules without opening or running Unity Hub. The tool is downloaded only when needed and stored separately from the app."
+                    TextWrapping="Wrap" />
+                <HyperlinkButton
+                    HorizontalAlignment="Left"
+                    NavigateUri="https://docs.unity.com/en-us/unity-cli/use-unity-cli"
+                    Padding="0"
+                    Content="Learn about Unity CLI" />
+            </StackPanel>
+
+            <InfoBar
+                x:Name="ToolSetupInfoBar"
+                Grid.Row="1"
+                IsClosable="False"
+                IsOpen="False"
+                Severity="Error"
+                Title="Unity CLI unavailable" />
+
+            <Border
+                Grid.Row="2"
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <Grid ColumnSpacing="24" RowSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="Version" />
+                    <TextBlock
+                        x:Name="ToolSetupVersionTextBlock"
+                        Grid.Column="1"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Checking…" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="Download size" />
+                    <TextBlock
+                        x:Name="ToolSetupSizeTextBlock"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="Checking…" />
+                    <TextBlock
+                        Grid.Row="2"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="Stored in" />
+                    <TextBlock
+                        x:Name="ToolSetupLocationTextBlock"
+                        Grid.Row="2"
+                        Grid.Column="1"
+                        IsTextSelectionEnabled="True"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Border>
+
+            <StackPanel
+                x:Name="ToolSetupProgressPanel"
+                Grid.Row="3"
+                Spacing="8">
+                <ProgressBar
+                    x:Name="ToolSetupProgressBar"
+                    AutomationProperties.Name="Unity CLI download progress"
+                    IsIndeterminate="True" />
+                <TextBlock
+                    x:Name="ToolSetupProgressTextBlock"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Checking the latest release…" />
+            </StackPanel>
+        </Grid>
+
+    </Grid>
+</ContentDialog>
