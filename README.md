@@ -47,4 +47,6 @@ Main frameworks and libraries:
 - [**CsWin32**](https://github.com/microsoft/CsWin32) by Microsoft under the [**MIT License**](https://github.com/microsoft/CsWin32/blob/main/LICENSE)
 - [**.NET**](https://github.com/dotnet/runtime) by Microsoft and the .NET Foundation under the [**MIT License**](https://github.com/dotnet/runtime/blob/main/LICENSE.TXT)
 
-**Disclaimer**: FluenityHub is a Unity project manager built with WinUI and fully open source. This application is not affiliated with, nor endorsed by, [**Unity Technologies**](https://unity.com/) by any means. Unity, Unity Hub, Unity Editor, Unity CLI, and related names are trademarks or products of their respective owners. FluenityHub is an open-source project. Contributions from the community are welcomed! Feel free to submit issues, feature suggestions, or pull requests.
+**Disclaimer**: FluenityHub is a Unity project manager built with WinUI and fully open source and is not affiliated with, nor endorsed by, [**Unity Technologies**](https://unity.com/) by any means. Unity, Unity Hub, Unity Editor, Unity CLI, and related names are trademarks or products of their respective owners. 
+
+Since its an open-source project, Contributions from the community are welcomed! Feel free to submit issues, feature suggestions, or pull requests.
