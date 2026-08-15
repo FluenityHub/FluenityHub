@@ -971,7 +971,12 @@ public sealed partial class SettingsPage : Page
 
     private void OnOpenGitHubClick(object sender, RoutedEventArgs e)
     {
-        OpenUrl("https://github.com/microsoft/WinUI-Gallery");
+        OpenUrl("https://github.com/FluenityHub/FluenityHub/issues/new/choose");
+    }
+
+    private void OnOpenCommunityToolkitClick(object sender, RoutedEventArgs e)
+    {
+        OpenUrl("https://github.com/CommunityToolkit/Windows");
     }
 
     private void OpenUrl(string url)

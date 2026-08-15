@@ -674,7 +674,7 @@
                                     <StackPanel Spacing="2">
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.3" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />
-                                        <HyperlinkButton Click="OnOpenGitHubClick" Content="Windows Community Toolkit" />
+                                        <HyperlinkButton Click="OnOpenCommunityToolkitClick" Content="Windows Community Toolkit" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content=".NET 10" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="System.Drawing.Common" />
                                     </StackPanel>
