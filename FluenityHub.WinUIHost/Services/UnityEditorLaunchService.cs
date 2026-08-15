@@ -139,11 +139,13 @@ public sealed class UnityEditorLaunchService
             try
             {
                 cliState = await _cliAuthService.GetStatusAsync(cancellationToken);
-                if (cliState.RequiresReauthentication)
+                if (!cliState.IsLoggedIn)
                 {
                     UnityEditorLaunchDiagnostics.Write(
                         "Auth",
-                        "Unity CLI session is stale; starting secure reauthentication.");
+                        cliState.RequiresReauthentication
+                            ? "Unity CLI session is stale; starting secure reauthentication."
+                            : "Unity CLI has no usable session; starting secure authentication.");
                     cliState = await _cliAuthService.LoginAsync(cancellationToken);
                 }
             }
