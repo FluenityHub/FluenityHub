@@ -1,5 +1,11 @@
-# FluenityHub
-
+<p align="center">
+  <img width="212" alt="FluenityHub_Logo" src="https://github.com/user-attachments/assets/bb69040e-383f-4312-b2fc-69d73d4e995b" />
+  <h1 align="center">
+    <br/>
+    FluenityHub
+    <br/>
+  </h1>
+</p>
 
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="License: GPL v3"></a>
@@ -16,7 +22,7 @@ FluenityHub is a native Windows application for managing Unity projects, Editor 
 
 # How Can I Download It?
 > [!NOTE]
-> Go to the Release Page > Click At the Assets > [Download The Latest Version](https://github.com/FluenityHub/FluenityHub/releases/latest "Download The Latest Version") (Recomended) Or [Download Apropriate Version  You Need](https://github.com/FluenityHub/FluenityHub/releases "Download Versions You Need")
+> Go to the Release Page > Click At the Assets > [Download The Latest Version](https://github.com/FluenityHub/FluenityHub/releases/latest "Download The Latest Version") (Recomended) Or [Download Version from list](https://github.com/FluenityHub/FluenityHub/releases "Download Versions from list")
 
 Don't forget to Raise an [Feedback](https://github.com/FluenityHub/FluenityHub/issues/new/choose) issue if you have any!
 
@@ -41,4 +47,6 @@ Main frameworks and libraries:
 - [**CsWin32**](https://github.com/microsoft/CsWin32) by Microsoft under the [**MIT License**](https://github.com/microsoft/CsWin32/blob/main/LICENSE)
 - [**.NET**](https://github.com/dotnet/runtime) by Microsoft and the .NET Foundation under the [**MIT License**](https://github.com/dotnet/runtime/blob/main/LICENSE.TXT)
 
-**Disclaimer**: FluenityHub is a Unity project manager built with WinUI and fully open source. This application is not affiliated with, nor endorsed by, [**Unity Technologies**](https://unity.com/) by any means. Unity, Unity Hub, Unity Editor, Unity CLI, and related names are trademarks or products of their respective owners. FluenityHub is an open-source project. Contributions from the community are welcomed! Feel free to submit issues, feature suggestions, or pull requests.
+**Disclaimer**: FluenityHub is a Unity project manager built with WinUI and fully open source and is not affiliated with, nor endorsed by, [**Unity Technologies**](https://unity.com/) by any means. Unity, Unity Hub, Unity Editor, Unity CLI, and related names are trademarks or products of their respective owners. 
+
+Since its an open-source project, Contributions from the community are welcomed! Feel free to submit issues, feature suggestions, or pull requests.
