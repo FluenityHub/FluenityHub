@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -88,7 +89,11 @@ internal static class UnitySharedAuthService
             try
             {
                 var hub = QueryActiveForeignKey(database, HubConsumer, out var hasHubRow);
-                isActive = hasHubRow && !string.IsNullOrWhiteSpace(hub);
+                // The database row survives Hub restarts. Treat it as an active
+                // Hub session only while the Hub process is actually running.
+                isActive = hasHubRow
+                    && !string.IsNullOrWhiteSpace(hub)
+                    && IsUnityHubRunning();
                 return true;
             }
             finally
@@ -99,6 +104,31 @@ internal static class UnitySharedAuthService
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
         {
             errorMessage = $"Unable to access Unity Hub's account state: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool IsUnityHubRunning()
+    {
+        try
+        {
+            return Process.GetProcesses().Any(process =>
+            {
+                try
+                {
+                    return process.ProcessName.Equals("Unity Hub", StringComparison.OrdinalIgnoreCase)
+                        || process.ProcessName.Equals("UnityHub", StringComparison.OrdinalIgnoreCase);
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            });
+        }
+        catch
+        {
+            // If process enumeration is unavailable, do not turn stale disk
+            // state into a permanent launch block.
             return false;
         }
     }
