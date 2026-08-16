@@ -264,9 +264,10 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         if (SourceProjectComboBox?.SelectedIndex >= 0 && SourceProjectComboBox.SelectedIndex < _availableProjects.Count)
         {
             var selected = _availableProjects[SourceProjectComboBox.SelectedIndex];
-            if (!string.IsNullOrWhiteSpace(selected.Title))
+            var sourceDirectoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(selected.Path));
+            if (!string.IsNullOrWhiteSpace(sourceDirectoryName))
             {
-                projName = selected.Title;
+                projName = sourceDirectoryName;
             }
         }
 
@@ -1012,6 +1013,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
             var keepSettings = KeepProjectSettingsCheckBox.IsChecked == true;
 
             var includedRootFiles = _selectedRootFiles.ToList();
+            var replaceProjectName = ReplaceNamePlaceholderCheckBox.IsChecked == true;
 
             var providerTag = GetSelectedSourceControlProvider();
             bool isPrivate = PrivateVisibilityRadioButton?.IsChecked == true;
@@ -1048,7 +1050,8 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                         version,
                         _customImagePath,
                         keepSettings,
-                        includedRootFiles);
+                        includedRootFiles,
+                        replaceProjectName);
                 }
 
                 if (ResultTemplate is not null && providerTag != "none")

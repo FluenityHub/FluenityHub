@@ -7,6 +7,7 @@ using System.Formats.Tar;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluenityHub_WinUIHost.Models;
 
@@ -15,6 +16,10 @@ namespace FluenityHub_WinUIHost.Services;
 public sealed class TemplateService
 {
     private static readonly string[] TemplateImageExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+    private const string ProjectNameToken = "%PROJECT_NAME%";
+    private const int MaximumRootFileCount = 50;
+    private const long MaximumRootFilesTotalBytes = 10 * 1024 * 1024;
+    private const long MaximumPlaceholderFileBytes = 1024 * 1024;
     private readonly string _unityHubTemplatesDir;
     private readonly IReadOnlyList<string> _templateSearchPaths;
 
@@ -70,6 +75,18 @@ public sealed class TemplateService
                         string version = root.TryGetProperty("version", out var v) ? v.GetString() ?? "1.0.0" : "1.0.0";
                         string unityVersion = root.TryGetProperty("unity", out var u) ? u.GetString() ?? "" : "";
                         string description = root.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                        var includedRootFiles = root.TryGetProperty("rootFiles", out var rootFilesElement) &&
+                                                rootFilesElement.ValueKind == JsonValueKind.Array
+                            ? rootFilesElement.EnumerateArray()
+                                .Where(item => item.ValueKind == JsonValueKind.String)
+                                .Select(item => item.GetString())
+                                .Where(item => !string.IsNullOrWhiteSpace(item))
+                                .Select(item => item!)
+                                .ToList()
+                            : [];
+                        var hasProjectNamePlaceholder =
+                            root.TryGetProperty("hasProjectNamePlaceholder", out var placeholderElement) &&
+                            placeholderElement.ValueKind == JsonValueKind.True;
                         DateTime creationDate = DateTime.Now;
                         if (root.TryGetProperty("creationDate", out var cd) && DateTime.TryParse(cd.GetString(), out var parsedDate))
                         {
@@ -95,6 +112,8 @@ public sealed class TemplateService
                                 Version = version,
                                 EditorVersion = unityVersion,
                                 ImagePath = coverPath,
+                                IncludedRootFiles = includedRootFiles,
+                                HasProjectNamePlaceholder = hasProjectNamePlaceholder,
                                 TemplateFolderPath = dir,
                                 TarballPath = File.Exists(tgzPath) ? tgzPath : string.Empty,
                                 IsUnityHubTemplate = true,
@@ -138,7 +157,8 @@ public sealed class TemplateService
         string version,
         string? customImagePath,
         bool keepProjectSettings,
-        List<string> includedRootFiles)
+        List<string> includedRootFiles,
+        bool replaceProjectName)
     {
         return await Task.Run(() =>
         {
@@ -163,9 +183,6 @@ public sealed class TemplateService
                     ["description"] = description,
                     ["creationDate"] = creationDate.ToString("o")
                 };
-
-                var packageJsonContent = pkgObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(Path.Combine(hubTemplateFolder, "package.json"), packageJsonContent);
 
                 // Create staging directory for ProjectData contents
                 var stagingDir = Path.Combine(Path.GetTempPath(), $"FluenityTemplateStaging_{Guid.NewGuid():N}");
@@ -197,21 +214,37 @@ public sealed class TemplateService
                         }
                     }
 
-                    // 5. Copy included root files
-                    if (includedRootFiles is not null)
+                    // 5. Copy the selected, safe root files using Unity Hub's limits.
+                    var copiedRootFiles = new List<string>();
+                    foreach (var rootFile in ResolveRootFiles(sourceProject.Path, includedRootFiles))
                     {
-                        foreach (var fileRelPath in includedRootFiles)
+                        var destFilePath = Path.Combine(stagingDir, rootFile.FileName);
+                        File.Copy(rootFile.SourcePath, destFilePath, overwrite: true);
+                        copiedRootFiles.Add(rootFile.FileName);
+
+                        if (replaceProjectName)
                         {
-                            if (string.IsNullOrWhiteSpace(fileRelPath)) continue;
-                            var srcFilePath = Path.Combine(sourceProject.Path, fileRelPath);
-                            if (File.Exists(srcFilePath))
-                            {
-                                var destFilePath = Path.Combine(stagingDir, fileRelPath);
-                                Directory.CreateDirectory(Path.GetDirectoryName(destFilePath)!);
-                                File.Copy(srcFilePath, destFilePath, overwrite: true);
-                            }
+                            TokenizeProjectName(destFilePath, Path.GetFileName(Path.TrimEndingDirectorySeparator(sourceProject.Path)));
                         }
                     }
+
+                    if (copiedRootFiles.Count > 0)
+                    {
+                        var rootFilesJson = new JsonArray();
+                        foreach (var rootFile in copiedRootFiles)
+                        {
+                            rootFilesJson.Add(rootFile);
+                        }
+
+                        pkgObj["rootFiles"] = rootFilesJson;
+                        if (replaceProjectName)
+                        {
+                            pkgObj["hasProjectNamePlaceholder"] = true;
+                        }
+                    }
+
+                    var packageJsonContent = pkgObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(Path.Combine(hubTemplateFolder, "package.json"), packageJsonContent);
 
                     // 6. Save cover image if provided
                     string savedImagePath = string.Empty;
@@ -242,7 +275,8 @@ public sealed class TemplateService
                         EditorVersion = sourceProject.Version ?? "2022.3.0f1",
                         ImagePath = savedImagePath,
                         KeepProjectSettings = keepProjectSettings,
-                        IncludedRootFiles = includedRootFiles ?? [],
+                        IncludedRootFiles = copiedRootFiles,
+                        HasProjectNamePlaceholder = replaceProjectName && copiedRootFiles.Count > 0,
                         TemplateFolderPath = hubTemplateFolder,
                         TarballPath = tgzPath,
                         IsUnityHubTemplate = true,
@@ -396,6 +430,18 @@ public sealed class TemplateService
                     return false;
                 }
 
+                if (template.HasProjectNamePlaceholder && template.IncludedRootFiles.Count > 0)
+                {
+                    var projectName = Path.GetFileName(Path.TrimEndingDirectorySeparator(targetProjectPath));
+                    foreach (var rootFile in template.IncludedRootFiles
+                                 .Where(IsSafeRootFileName)
+                                 .Distinct(StringComparer.Ordinal)
+                                 .Take(MaximumRootFileCount))
+                    {
+                        SubstituteProjectName(Path.Combine(targetProjectPath, rootFile), projectName);
+                    }
+                }
+
                 // Ensure ProjectSettings/ProjectVersion.txt is updated with chosen targetEditorVersion
                 var projectSettingsDir = Path.Combine(targetProjectPath, "ProjectSettings");
                 Directory.CreateDirectory(projectSettingsDir);
@@ -429,6 +475,156 @@ public sealed class TemplateService
             System.Diagnostics.Debug.WriteLine($"DeleteCustomTemplate failed: {ex}");
             return false;
         }
+    }
+
+    private readonly record struct RootFileCandidate(string FileName, string SourcePath, long Size);
+
+    private static IReadOnlyList<RootFileCandidate> ResolveRootFiles(
+        string projectPath,
+        IEnumerable<string>? requestedRootFiles)
+    {
+        if (requestedRootFiles is null)
+        {
+            return [];
+        }
+
+        var projectRoot = Path.GetFullPath(projectPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var projectRootPrefix = projectRoot + Path.DirectorySeparatorChar;
+        var selected = new List<RootFileCandidate>();
+        long selectedBytes = 0;
+
+        foreach (var fileName in requestedRootFiles
+                     .Where(IsSafeRootFileName)
+                     .Distinct(StringComparer.Ordinal)
+                     .OrderBy(name => name, StringComparer.Ordinal))
+        {
+            if (selected.Count >= MaximumRootFileCount)
+            {
+                break;
+            }
+
+            var sourcePath = Path.GetFullPath(Path.Combine(projectRoot, fileName));
+            if (!sourcePath.StartsWith(projectRootPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var file = new FileInfo(sourcePath);
+            if (!file.Exists || file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                continue;
+            }
+
+            if (selectedBytes + file.Length > MaximumRootFilesTotalBytes)
+            {
+                continue;
+            }
+
+            selectedBytes += file.Length;
+            selected.Add(new RootFileCandidate(fileName, sourcePath, file.Length));
+        }
+
+        return selected;
+    }
+
+    private static bool IsSafeRootFileName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) ||
+            fileName is "." or ".." ||
+            Path.IsPathRooted(fileName) ||
+            fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            !string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal) ||
+            fileName.EndsWith(' ') ||
+            fileName.EndsWith('.'))
+        {
+            return false;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        return !Regex.IsMatch(
+            stem,
+            @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static void TokenizeProjectName(string filePath, string sourceProjectName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceProjectName) || sourceProjectName is "." or "..")
+        {
+            return;
+        }
+
+        TransformSmallUtf8File(
+            filePath,
+            content => Regex.Replace(
+                content,
+                $@"\b{Regex.Escape(sourceProjectName.Trim())}\b",
+                ProjectNameToken,
+                RegexOptions.CultureInvariant));
+    }
+
+    private static void SubstituteProjectName(string filePath, string projectName)
+    {
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            return;
+        }
+
+        TransformSmallUtf8File(
+            filePath,
+            content => content.Replace(ProjectNameToken, projectName, StringComparison.Ordinal));
+    }
+
+    private static void TransformSmallUtf8File(string filePath, Func<string, string> transform)
+    {
+        try
+        {
+            var file = new FileInfo(filePath);
+            if (!file.Exists ||
+                file.Length > MaximumPlaceholderFileBytes ||
+                file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                return;
+            }
+
+            var bytes = File.ReadAllBytes(filePath);
+            if (LooksLikeBinaryOrUtf16(bytes))
+            {
+                return;
+            }
+
+            var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+            var original = utf8.GetString(bytes);
+            var transformed = transform(original);
+            if (!string.Equals(original, transformed, StringComparison.Ordinal))
+            {
+                File.WriteAllText(filePath, transformed, new UTF8Encoding(false));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DecoderFallbackException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Skipped root-file placeholder substitution for {filePath}: {ex.Message}");
+        }
+    }
+
+    private static bool LooksLikeBinaryOrUtf16(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length >= 2 &&
+            ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
+             (bytes[0] == 0xFE && bytes[1] == 0xFF)))
+        {
+            return true;
+        }
+
+        if (bytes.Length >= 4 &&
+            ((bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0xFE && bytes[3] == 0xFF) ||
+             (bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0x00 && bytes[3] == 0x00)))
+        {
+            return true;
+        }
+
+        return bytes.Contains((byte)0);
     }
 
     private static void ExtractTarGz(string tgzFilePath, string outputDirectory)
