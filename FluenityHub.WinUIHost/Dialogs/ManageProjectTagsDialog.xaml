@@ -219,52 +219,73 @@
                     </StackPanel>
                 </Button>
             </Grid>
-            <ItemsControl x:Name="AvailableTagsItemsControl">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="dialogs:TagChipItem">
-                        <ToggleButton
-                            Height="28"
-                            Padding="8,0,4,0"
-                            AutomationProperties.Name="{x:Bind Name}"
-                            Click="OnTagChipToggleClick"
-                            CornerRadius="{ThemeResource ControlCornerRadius}"
-                            Loaded="OnTagToggleButtonLoaded"
-                            Tag="{x:Bind Name}"
-                            ToolTipService.ToolTip="{x:Bind Name}">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Ellipse
-                                    Width="8"
-                                    Height="8"
-                                    VerticalAlignment="Center"
-                                    Fill="{x:Bind ColorBrush, Mode=OneTime}" />
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    MaxWidth="140"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Text="{x:Bind Name}"
-                                    TextTrimming="CharacterEllipsis" />
-                                <Button
-                                    Width="18"
-                                    Height="18"
-                                    Padding="0"
-                                    VerticalAlignment="Center"
-                                    AutomationProperties.Name="Delete category"
-                                    Click="OnDeleteAvailableTagClick"
-                                    Style="{StaticResource SubtleButtonStyle}"
-                                    Tag="{x:Bind Name}"
-                                    ToolTipService.ToolTip="Delete category">
-                                    <FontIcon FontSize="8" Glyph="&#xE711;" />
-                                </Button>
-                            </StackPanel>
-                        </ToggleButton>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <Grid>
+                <ItemsControl
+                    x:Name="AvailableTagsItemsControl"
+                    AllowDrop="True"
+                    AutomationProperties.HelpText="Drag categories to change their order."
+                    AutomationProperties.Name="Available categories"
+                    DragLeave="OnTagCollectionDragLeave"
+                    DragOver="OnAvailableTagsDragOver"
+                    Drop="OnAvailableTagsDrop">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="dialogs:TagChipItem">
+                            <ToggleButton
+                                Height="28"
+                                Padding="8,0,4,0"
+                                AutomationProperties.Name="{x:Bind Name}"
+                                CanDrag="True"
+                                Click="OnTagChipToggleClick"
+                                CornerRadius="{ThemeResource ControlCornerRadius}"
+                                DragStarting="OnAvailableTagDragStarting"
+                                DropCompleted="OnTagDropCompleted"
+                                Loaded="OnTagToggleButtonLoaded"
+                                Tag="{x:Bind Name}"
+                                ToolTipService.ToolTip="{x:Bind Name}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Ellipse
+                                        Width="8"
+                                        Height="8"
+                                        VerticalAlignment="Center"
+                                        Fill="{x:Bind ColorBrush, Mode=OneTime}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        MaxWidth="140"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Name}"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <Button
+                                        Width="18"
+                                        Height="18"
+                                        Padding="0"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Delete category"
+                                        Click="OnDeleteAvailableTagClick"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        Tag="{x:Bind Name}"
+                                        ToolTipService.ToolTip="Delete category">
+                                        <FontIcon FontSize="8" Glyph="&#xE711;" />
+                                    </Button>
+                                </StackPanel>
+                            </ToggleButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Canvas IsHitTestVisible="False">
+                    <Border
+                        x:Name="AvailableTagDropIndicator"
+                        Width="1"
+                        Height="28"
+                        Background="{ThemeResource TextFillColorPrimaryBrush}"
+                        CornerRadius="2"
+                        Visibility="Collapsed" />
+                </Canvas>
+            </Grid>
         </StackPanel>
 
         <!-- Active Tags Card Section -->
@@ -306,53 +327,74 @@
                     Text="No tags assigned to this project yet."
                     Visibility="Collapsed" />
 
-                <ItemsControl x:Name="ActiveTagsItemsControl">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="dialogs:TagChipItem">
-                            <Border
-                                Height="26"
-                                Padding="8,2"
-                                Background="{x:Bind TintBrush, Mode=OneTime}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="{ThemeResource ControlCornerRadius}"
-                                Loaded="OnActiveTagBorderLoaded"
-                                Tag="{x:Bind Name}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Ellipse
-                                        Width="8"
-                                        Height="8"
-                                        VerticalAlignment="Center"
-                                        Fill="{x:Bind ColorBrush, Mode=OneTime}" />
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        MaxWidth="150"
-                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                        Text="{x:Bind Name}"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <Button
-                                        Width="16"
-                                        Height="16"
-                                        Padding="0"
-                                        VerticalAlignment="Center"
-                                        AutomationProperties.Name="Clear tag"
-                                        Click="OnRemoveTagClick"
-                                        Style="{StaticResource SubtleButtonStyle}"
-                                        Tag="{x:Bind Name}"
-                                        ToolTipService.ToolTip="Clear tag">
-                                        <FontIcon FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE711;" />
-                                    </Button>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <Grid>
+                    <ItemsControl
+                        x:Name="ActiveTagsItemsControl"
+                        AllowDrop="True"
+                        AutomationProperties.HelpText="Drag active tags to change their order."
+                        AutomationProperties.Name="Active tags"
+                        DragLeave="OnTagCollectionDragLeave"
+                        DragOver="OnActiveTagsDragOver"
+                        Drop="OnActiveTagsDrop">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="dialogs:TagChipItem">
+                                <Border
+                                    Height="26"
+                                    Padding="8,2"
+                                    CanDrag="True"
+                                    Background="{x:Bind TintBrush, Mode=OneTime}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                                    DragStarting="OnActiveTagDragStarting"
+                                    DropCompleted="OnTagDropCompleted"
+                                    Loaded="OnActiveTagBorderLoaded"
+                                    Tag="{x:Bind Name}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Ellipse
+                                            Width="8"
+                                            Height="8"
+                                            VerticalAlignment="Center"
+                                            Fill="{x:Bind ColorBrush, Mode=OneTime}" />
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            MaxWidth="150"
+                                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind Name}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <Button
+                                            Width="16"
+                                            Height="16"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.Name="Clear tag"
+                                            Click="OnRemoveTagClick"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Tag="{x:Bind Name}"
+                                            ToolTipService.ToolTip="Clear tag">
+                                            <FontIcon FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE711;" />
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Canvas IsHitTestVisible="False">
+                        <Border
+                            x:Name="ActiveTagDropIndicator"
+                            Width="1"
+                            Height="26"
+                            Background="{ThemeResource TextFillColorPrimaryBrush}"
+                            CornerRadius="2"
+                            Visibility="Collapsed" />
+                    </Canvas>
+                </Grid>
             </StackPanel>
         </Border>
     </StackPanel>

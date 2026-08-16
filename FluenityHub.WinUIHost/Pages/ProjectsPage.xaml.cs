@@ -1075,7 +1075,10 @@ public sealed partial class ProjectsPage : Page
                 .Concat(_settings.ProjectTags.Values.SelectMany(t => t))
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 
-            var dialog = new ManageProjectTagsDialog(vm.Project, allGlobalTags)
+            var dialog = new ManageProjectTagsDialog(
+                vm.Project,
+                allGlobalTags,
+                _settings.TagCategoryOrder)
             {
                 XamlRoot = XamlRoot ?? Content?.XamlRoot,
                 RequestedTheme = GetDialogTheme()
@@ -1100,6 +1103,9 @@ public sealed partial class ProjectsPage : Page
                 var latestSettings = _settingsStore.Load();
                 latestSettings.ProjectTags ??= new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
                 latestSettings.ProjectTags.Remove(vm.Project.Path);
+                latestSettings.TagCategoryOrder = dialog.AvailableTags
+                    .Select(tag => tag.Name)
+                    .ToList();
                 _settingsStore.Save(latestSettings);
                 _settings = latestSettings;
                 RebuildTagFilterMenu();

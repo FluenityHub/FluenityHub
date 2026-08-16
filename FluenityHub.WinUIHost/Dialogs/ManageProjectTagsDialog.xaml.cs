@@ -6,6 +6,10 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
+using Windows.Graphics.Imaging;
 
 namespace FluenityHub_WinUIHost.Dialogs;
 
@@ -31,7 +35,15 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
     public ObservableCollection<TagChipItem> AvailableTags { get; } = [];
     public ObservableCollection<TagChipItem> SelectedTags { get; } = [];
 
-    public ManageProjectTagsDialog(UnityProjectInfo project, IEnumerable<string>? existingGlobalTags = null)
+    private ObservableCollection<TagChipItem>? _dragSource;
+    private TagChipItem? _draggedTag;
+    private FrameworkElement? _draggedElement;
+    private SoftwareBitmap? _dragPreviewBitmap;
+
+    public ManageProjectTagsDialog(
+        UnityProjectInfo project,
+        IEnumerable<string>? existingGlobalTags = null,
+        IEnumerable<string>? preferredCategoryOrder = null)
     {
         InitializeComponent();
 
@@ -45,7 +57,17 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         }
         seedTags.AddRange(project.Tags);
 
-        foreach (var tag in seedTags.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase))
+        var distinctSeedTags = seedTags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var orderedCategories = (preferredCategoryOrder ?? [])
+            .Concat(distinctSeedTags)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var tag in orderedCategories)
         {
             AvailableTags.Add(new TagChipItem(tag));
         }
@@ -74,6 +96,217 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         customFlyout.Items.Add(removeItem);
         CustomColorPreviewBtn.ContextFlyout = customFlyout;
 
+    }
+
+    private readonly record struct TagDropPlacement(int Index, double X, double Y, double Height);
+
+    private async void OnAvailableTagDragStarting(UIElement sender, DragStartingEventArgs args)
+        => await BeginTagDragAsync((FrameworkElement)sender, args, AvailableTags);
+
+    private async void OnActiveTagDragStarting(UIElement sender, DragStartingEventArgs args)
+        => await BeginTagDragAsync((FrameworkElement)sender, args, SelectedTags);
+
+    private void OnAvailableTagsDragOver(object sender, DragEventArgs args)
+        => UpdateTagDropIndicator(
+            AvailableTagsItemsControl,
+            AvailableTagDropIndicator,
+            AvailableTags,
+            args);
+
+    private void OnActiveTagsDragOver(object sender, DragEventArgs args)
+        => UpdateTagDropIndicator(
+            ActiveTagsItemsControl,
+            ActiveTagDropIndicator,
+            SelectedTags,
+            args);
+
+    private void OnAvailableTagsDrop(object sender, DragEventArgs args)
+        => CompleteTagReorder(AvailableTagsItemsControl, AvailableTags, args);
+
+    private void OnActiveTagsDrop(object sender, DragEventArgs args)
+        => CompleteTagReorder(ActiveTagsItemsControl, SelectedTags, args);
+
+    private void OnTagCollectionDragLeave(object sender, DragEventArgs args)
+        => HideTagDropIndicators();
+
+    private void OnTagDropCompleted(UIElement sender, DropCompletedEventArgs args)
+        => ResetTagDragState();
+
+    private async Task BeginTagDragAsync(
+        FrameworkElement sender,
+        DragStartingEventArgs args,
+        ObservableCollection<TagChipItem> source)
+    {
+        if (sender.Tag is not string tagName)
+        {
+            args.Cancel = true;
+            return;
+        }
+
+        var item = source.FirstOrDefault(tag =>
+            tag.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase));
+        if (item is null)
+        {
+            args.Cancel = true;
+            return;
+        }
+
+        _dragSource = source;
+        _draggedTag = item;
+        _draggedElement = sender;
+        args.Data.RequestedOperation = DataPackageOperation.Move;
+        args.Data.SetText(item.Name);
+
+        var deferral = args.GetDeferral();
+        try
+        {
+            var preview = new RenderTargetBitmap();
+            await preview.RenderAsync(sender);
+            var pixels = await preview.GetPixelsAsync();
+            if (preview.PixelWidth > 0 && preview.PixelHeight > 0 && pixels.Length > 0)
+            {
+                _dragPreviewBitmap?.Dispose();
+                _dragPreviewBitmap = SoftwareBitmap.CreateCopyFromBuffer(
+                    pixels,
+                    BitmapPixelFormat.Bgra8,
+                    preview.PixelWidth,
+                    preview.PixelHeight,
+                    BitmapAlphaMode.Premultiplied);
+                args.DragUI.SetContentFromSoftwareBitmap(
+                    _dragPreviewBitmap,
+                    new Point(preview.PixelWidth / 2d, preview.PixelHeight));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Unable to create the custom tag drag preview: {ex}");
+        }
+        finally
+        {
+            _draggedElement.Opacity = 0.45;
+            HideTagDropIndicators();
+            deferral.Complete();
+        }
+    }
+
+    private void UpdateTagDropIndicator(
+        ItemsControl itemsControl,
+        FrameworkElement indicator,
+        ObservableCollection<TagChipItem> target,
+        DragEventArgs args)
+    {
+        if (!ReferenceEquals(_dragSource, target) || _draggedTag is null)
+        {
+            return;
+        }
+
+        args.DragUIOverride.IsCaptionVisible = false;
+        args.DragUIOverride.IsGlyphVisible = false;
+
+        var placement = GetTagDropPlacement(itemsControl, args.GetPosition(itemsControl));
+        Canvas.SetLeft(indicator, Math.Max(0, placement.X - (indicator.Width / 2)));
+        Canvas.SetTop(indicator, placement.Y);
+        indicator.Height = placement.Height;
+        indicator.Visibility = Visibility.Visible;
+
+        args.AcceptedOperation = DataPackageOperation.Move;
+        args.Handled = true;
+    }
+
+    private void CompleteTagReorder(
+        ItemsControl itemsControl,
+        ObservableCollection<TagChipItem> target,
+        DragEventArgs args)
+    {
+        try
+        {
+            if (!ReferenceEquals(_dragSource, target) || _draggedTag is null)
+            {
+                return;
+            }
+
+            var oldIndex = target.IndexOf(_draggedTag);
+            if (oldIndex < 0)
+            {
+                return;
+            }
+
+            var placement = GetTagDropPlacement(itemsControl, args.GetPosition(itemsControl));
+            var insertionIndex = placement.Index;
+            if (insertionIndex > oldIndex)
+            {
+                insertionIndex--;
+            }
+
+            var newIndex = Math.Clamp(insertionIndex, 0, target.Count - 1);
+            if (newIndex != oldIndex)
+            {
+                target.Move(oldIndex, newIndex);
+                UpdateUIState();
+            }
+
+            args.AcceptedOperation = DataPackageOperation.Move;
+            args.Handled = true;
+        }
+        finally
+        {
+            ResetTagDragState();
+        }
+    }
+
+    private static TagDropPlacement GetTagDropPlacement(ItemsControl itemsControl, Point pointer)
+    {
+        FrameworkElement? lastContainer = null;
+        Point lastOrigin = default;
+
+        for (var index = 0; index < itemsControl.Items.Count; index++)
+        {
+            if (itemsControl.ContainerFromIndex(index) is not FrameworkElement container)
+            {
+                continue;
+            }
+
+            var origin = container.TransformToVisual(itemsControl).TransformPoint(new Point());
+            var bottom = origin.Y + container.ActualHeight;
+            var horizontalMidpoint = origin.X + (container.ActualWidth / 2);
+            if (pointer.Y < origin.Y
+                || (pointer.Y <= bottom && pointer.X < horizontalMidpoint))
+            {
+                return new TagDropPlacement(index, origin.X, origin.Y, container.ActualHeight);
+            }
+
+            lastContainer = container;
+            lastOrigin = origin;
+        }
+
+        return lastContainer is null
+            ? new TagDropPlacement(0, 0, 0, 28)
+            : new TagDropPlacement(
+                itemsControl.Items.Count,
+                lastOrigin.X + lastContainer.ActualWidth + 3,
+                lastOrigin.Y,
+                lastContainer.ActualHeight);
+    }
+
+    private void ResetTagDragState()
+    {
+        HideTagDropIndicators();
+        if (_draggedElement is not null)
+        {
+            _draggedElement.Opacity = 1;
+        }
+
+        _dragSource = null;
+        _draggedTag = null;
+        _draggedElement = null;
+        _dragPreviewBitmap?.Dispose();
+        _dragPreviewBitmap = null;
+    }
+
+    private void HideTagDropIndicators()
+    {
+        AvailableTagDropIndicator.Visibility = Visibility.Collapsed;
+        ActiveTagDropIndicator.Visibility = Visibility.Collapsed;
     }
 
     private bool SelectedTagsAny(string tagName) =>
