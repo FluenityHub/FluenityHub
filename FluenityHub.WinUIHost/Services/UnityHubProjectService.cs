@@ -155,7 +155,7 @@ public sealed class UnityHubProjectService
 
     /// <summary>
     /// Applies the same normalization contract used by Unity Hub before tags
-    /// are written to projects-v1.json.
+    /// are written to projects-v1.json while preserving the user's tag order.
     /// </summary>
     public static List<string> NormalizeProjectTags(IEnumerable<string>? tags)
     {
@@ -168,7 +168,6 @@ public sealed class UnityHubProjectService
             .Select(NormalizeProjectTag)
             .Where(static tag => tag.Length > 0)
             .Distinct(StringComparer.Ordinal)
-            .OrderBy(static tag => tag, StringComparer.CurrentCulture)
             .Take(MaximumProjectTagCount)
             .ToList();
     }

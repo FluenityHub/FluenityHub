@@ -14,6 +14,7 @@ public sealed class AppSettings
     public List<string> CustomTemplatePaths { get; set; } = [];
     public Dictionary<string, List<string>> ProjectTags { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> TagColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> TagCategoryOrder { get; set; } = [];
     public string UnityCloudOrganizationId { get; set; } = string.Empty;
     // Display options
     public bool ShowFavoritesColumn { get; set; } = true;
