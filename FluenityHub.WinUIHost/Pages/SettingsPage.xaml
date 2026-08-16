@@ -672,7 +672,7 @@
                                 <StackPanel Spacing="8">
                                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Dependencies &amp; references" />
                                     <StackPanel Spacing="2">
-                                        <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.3" />
+                                        <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.4" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />
                                         <HyperlinkButton Click="OnOpenCommunityToolkitClick" Content="Windows Community Toolkit" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content=".NET 10" />
