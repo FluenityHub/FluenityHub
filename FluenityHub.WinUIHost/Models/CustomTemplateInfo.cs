@@ -18,6 +18,7 @@ public sealed class CustomTemplateInfo
     public string ImagePath { get; set; } = string.Empty;
     public bool KeepProjectSettings { get; set; } = true;
     public List<string> IncludedRootFiles { get; set; } = [];
+    public bool HasProjectNamePlaceholder { get; set; }
     public string TemplateFolderPath { get; set; } = string.Empty;
     public string TarballPath { get; set; } = string.Empty;
     public bool IsUnityHubTemplate { get; set; } = false;
