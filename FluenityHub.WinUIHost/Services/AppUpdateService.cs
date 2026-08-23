@@ -16,7 +16,8 @@ public sealed record AppUpdateInfo(
     string ReleaseTitle,
     string ReleaseNotes,
     string ReleaseUrl,
-    string? DownloadUrl
+    string? DownloadUrl,
+    string? ErrorMessage = null
 );
 
 /// <summary>
@@ -43,8 +44,9 @@ public static class AppUpdateService
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, ReleasesApiUrl);
-            var response = await HttpClient.SendAsync(request);
+            NetworkConnectivityService.Current.EnsureCanAttemptInternet();
+            using var request = new HttpRequestMessage(HttpMethod.Get, ReleasesApiUrl);
+            using var response = await HttpClient.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -110,7 +112,7 @@ public static class AppUpdateService
                 DownloadUrl: downloadUrl
             );
         }
-        catch
+        catch (Exception ex)
         {
             return new AppUpdateInfo(
                 HasUpdate: false,
@@ -119,7 +121,10 @@ public static class AppUpdateService
                 ReleaseTitle: string.Empty,
                 ReleaseNotes: string.Empty,
                 ReleaseUrl: $"https://github.com/{GitHubRepoOwner}/{GitHubRepoName}/releases",
-                DownloadUrl: null
+                DownloadUrl: null,
+                ErrorMessage: NetworkConnectivityService.Current.GetUserMessage(
+                    ex,
+                    "the FluenityHub update service")
             );
         }
     }

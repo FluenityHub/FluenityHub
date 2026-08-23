@@ -29,7 +29,7 @@ internal sealed class UnityHubIpcGuard : IDisposable
     }
 
     public static bool TryAcquire(
-        UnitySharedAccessToken token,
+        UnitySharedAccessToken? token,
         out UnityHubIpcGuard? guard,
         out string errorMessage)
     {
@@ -144,12 +144,12 @@ internal sealed class UnityHubIpcGuard : IDisposable
 
         private readonly CancellationTokenSource _cancellation = new();
         private readonly ConcurrentDictionary<int, Task> _clients = new();
-        private UnitySharedAccessToken _token;
+        private UnitySharedAccessToken? _token;
         private NamedPipeServerStream? _waitingPipe;
         private int _nextClientId;
         private bool _disposed;
 
-        public PipeServer(UnitySharedAccessToken token)
+        public PipeServer(UnitySharedAccessToken? token)
         {
             _token = token;
             _waitingPipe = CreatePipe();
@@ -157,7 +157,7 @@ internal sealed class UnityHubIpcGuard : IDisposable
             _ = AcceptConnectionsAsync();
         }
 
-        public void UpdateAccount(UnitySharedAccessToken token)
+        public void UpdateAccount(UnitySharedAccessToken? token)
             => Volatile.Write(ref _token, token);
 
         private async Task AcceptConnectionsAsync()
@@ -316,6 +316,7 @@ internal sealed class UnityHubIpcGuard : IDisposable
         private (string EventName, JsonNode Data)? CreateResponse(string? eventName)
         {
             var token = Volatile.Read(ref _token);
+            var isLoggedIn = token is not null && !string.IsNullOrWhiteSpace(token.Value);
             return eventName switch
             {
                 "health:check" => (eventName, new JsonObject { ["health"] = true }),
@@ -323,16 +324,16 @@ internal sealed class UnityHubIpcGuard : IDisposable
                 {
                     ["error"] = false,
                     ["initialized"] = true,
-                    ["loggedIn"] = true,
+                    ["loggedIn"] = isLoggedIn,
                     ["maintenance"] = false,
-                    ["online"] = true,
+                    ["online"] = isLoggedIn,
                     ["ready"] = true,
                     ["showLoginWindow"] = false,
-                    ["workOffline"] = false
+                    ["workOffline"] = !isLoggedIn
                 }),
-                "userInfo:get" => ("userInfo:changed", new JsonObject
+                "userInfo:get" => ("userInfo:changed", isLoggedIn ? new JsonObject
                 {
-                    ["userId"] = token.Account.ForeignKey,
+                    ["userId"] = token!.Account.ForeignKey,
                     ["displayName"] = token.Account.DisplayName,
                     ["name"] = token.Account.Email,
                     ["primaryOrg"] = token.Account.PrimaryOrganization,
@@ -342,6 +343,10 @@ internal sealed class UnityHubIpcGuard : IDisposable
                     ["whitelisted"] = true,
                     ["organizationForeignKeys"] = string.Empty,
                     ["cached"] = false
+                } : new JsonObject
+                {
+                    ["valid"] = false,
+                    ["loggedIn"] = false
                 }),
                 "orgInfo:get" => ("orgInfo:changed", new JsonArray()),
                 "config:get" or "config:get-default" or "config:get-urls" =>

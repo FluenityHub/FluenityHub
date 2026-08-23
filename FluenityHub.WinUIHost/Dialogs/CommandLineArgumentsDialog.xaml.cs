@@ -29,9 +29,25 @@ public sealed partial class CommandLineArgumentsDialog : ContentDialog
 
     private void OnPresetClick(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuFlyoutItem item && item.Tag is string flags)
+        if (sender is MenuFlyoutItem item)
         {
-            ArgumentsTextBox.Text = flags;
+            var flags = item.Tag as string;
+            if (string.IsNullOrEmpty(flags) || flags.Equals("CLEAR", StringComparison.OrdinalIgnoreCase))
+            {
+                ArgumentsTextBox.Text = string.Empty;
+            }
+            else
+            {
+                var currentText = ArgumentsTextBox.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(currentText))
+                {
+                    ArgumentsTextBox.Text = flags;
+                }
+                else if (!currentText.Contains(flags, StringComparison.OrdinalIgnoreCase))
+                {
+                    ArgumentsTextBox.Text = $"{currentText} {flags}";
+                }
+            }
         }
     }
 
@@ -47,7 +63,7 @@ public sealed partial class CommandLineArgumentsDialog : ContentDialog
         }
         catch
         {
-            // Opening documentation is optional; keep the dialog usable if it fails.
+            // Ignore shell errors
         }
     }
 }

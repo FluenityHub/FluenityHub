@@ -70,11 +70,12 @@ public sealed class TemplateService
                         using var doc = JsonDocument.Parse(json);
                         var root = doc.RootElement;
 
-                        string slug = root.TryGetProperty("name", out var n) ? n.GetString() ?? Path.GetFileName(dir) : Path.GetFileName(dir);
-                        string displayName = root.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? slug : slug;
-                        string version = root.TryGetProperty("version", out var v) ? v.GetString() ?? "1.0.0" : "1.0.0";
-                        string unityVersion = root.TryGetProperty("unity", out var u) ? u.GetString() ?? "" : "";
-                        string description = root.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                        string slug = root.TryGetProperty("name", out var n) ? n.GetString()?.Trim() ?? Path.GetFileName(dir) : Path.GetFileName(dir);
+                        string displayName = root.TryGetProperty("displayName", out var dn) ? dn.GetString()?.Trim() ?? slug : slug;
+                        string version = root.TryGetProperty("version", out var v) ? v.GetString()?.Trim() ?? "1.0.0" : "1.0.0";
+                        if (string.IsNullOrWhiteSpace(version)) version = "1.0.0";
+                        string unityVersion = root.TryGetProperty("unity", out var u) ? u.GetString()?.Trim() ?? "" : "";
+                        string description = root.TryGetProperty("description", out var d) ? d.GetString()?.Trim() ?? "" : "";
                         var includedRootFiles = root.TryGetProperty("rootFiles", out var rootFilesElement) &&
                                                 rootFilesElement.ValueKind == JsonValueKind.Array
                             ? rootFilesElement.EnumerateArray()
@@ -100,6 +101,25 @@ public sealed class TemplateService
                             if (tgzFiles.Length > 0) tgzPath = tgzFiles[0];
                         }
 
+                        var tagsList = new List<string>();
+                        if (root.TryGetProperty("keywords", out var kwElement) && kwElement.ValueKind == JsonValueKind.Array)
+                        {
+                            tagsList.AddRange(kwElement.EnumerateArray()
+                                .Where(item => item.ValueKind == JsonValueKind.String)
+                                .Select(item => item.GetString())
+                                .Where(item => !string.IsNullOrWhiteSpace(item))
+                                .Select(item => item!.Trim()));
+                        }
+                        if (root.TryGetProperty("tags", out var tagsElement) && tagsElement.ValueKind == JsonValueKind.Array)
+                        {
+                            tagsList.AddRange(tagsElement.EnumerateArray()
+                                .Where(item => item.ValueKind == JsonValueKind.String)
+                                .Select(item => item.GetString())
+                                .Where(item => !string.IsNullOrWhiteSpace(item))
+                                .Select(item => item!.Trim()));
+                        }
+                        tagsList = tagsList.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
                         string coverPath = FindTemplateImagePath(dir, slug);
                         var dedupeKey = MakeSlug(displayName);
                         if (!result.ContainsKey(dedupeKey))
@@ -112,6 +132,7 @@ public sealed class TemplateService
                                 Version = version,
                                 EditorVersion = unityVersion,
                                 ImagePath = coverPath,
+                                Tags = tagsList,
                                 IncludedRootFiles = includedRootFiles,
                                 HasProjectNamePlaceholder = hasProjectNamePlaceholder,
                                 TemplateFolderPath = dir,
@@ -119,6 +140,39 @@ public sealed class TemplateService
                                 IsUnityHubTemplate = true,
                                 CreatedAt = creationDate
                             };
+                        }
+                        // Check if package.json is missing any of the 6 keys required by Unity Hub:
+                        // name, displayName, version, unity, description, dependencies
+                        var hasDependencies = root.TryGetProperty("dependencies", out _);
+                        var hasDisplayName = root.TryGetProperty("displayName", out _);
+                        var hasDescription = root.TryGetProperty("description", out _);
+                        var hasUnity = root.TryGetProperty("unity", out _);
+
+                        if (!hasDependencies || !hasDisplayName || !hasDescription || !hasUnity)
+                        {
+                            try
+                            {
+                                var node = JsonNode.Parse(json) as JsonObject;
+                                if (node is not null)
+                                {
+                                    if (!hasDisplayName) node["displayName"] = displayName;
+                                    if (!hasDescription) node["description"] = description;
+                                    if (!hasUnity) node["unity"] = unityVersion;
+                                    if (!hasDependencies) node["dependencies"] = new JsonObject();
+                                    WriteAllTextAtomically(packageJsonPath, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                                }
+                            }
+                            catch { }
+                        }
+
+                        // Ensure template is registered in Unity Hub's sources map if tgz exists
+                        if (File.Exists(tgzPath))
+                        {
+                            try
+                            {
+                                new UnityHubTemplateSettingsService().TouchTemplateSource(tgzPath);
+                            }
+                            catch { }
                         }
                     }
                     catch (Exception ex)
@@ -158,7 +212,8 @@ public sealed class TemplateService
         string? customImagePath,
         bool keepProjectSettings,
         List<string> includedRootFiles,
-        bool replaceProjectName)
+        bool replaceProjectName,
+        IEnumerable<string>? tags = null)
     {
         return await Task.Run(() =>
         {
@@ -169,7 +224,18 @@ public sealed class TemplateService
 
                 var slug = MakeSlug(name);
                 var hubTemplateFolder = Path.Combine(_unityHubTemplatesDir, slug);
+                if (Directory.Exists(hubTemplateFolder)) return null;
                 Directory.CreateDirectory(hubTemplateFolder);
+
+                var normalizedVersion = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version.Trim().TrimStart('v', 'V');
+                if (string.IsNullOrWhiteSpace(normalizedVersion)) normalizedVersion = "1.0.0";
+                var normalizedDescription = description?.Trim() ?? string.Empty;
+
+                var validTags = (tags ?? [])
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Select(t => t.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
                 // 1. Create Unity Hub package.json
                 var creationDate = DateTime.Now;
@@ -177,56 +243,48 @@ public sealed class TemplateService
                 {
                     ["name"] = slug,
                     ["displayName"] = name,
-                    ["version"] = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version,
+                    ["version"] = normalizedVersion,
                     ["type"] = "template",
                     ["unity"] = sourceProject.Version ?? "2022.3.0f1",
-                    ["description"] = description,
+                    ["description"] = normalizedDescription,
                     ["creationDate"] = creationDate.ToString("o")
                 };
 
-                // Create staging directory for ProjectData contents
-                var stagingDir = Path.Combine(Path.GetTempPath(), $"FluenityTemplateStaging_{Guid.NewGuid():N}");
-                Directory.CreateDirectory(stagingDir);
-
-                try
+                if (validTags.Count > 0)
                 {
-                    // 2. Copy Assets directory safely
-                    var srcAssets = Path.Combine(sourceProject.Path, "Assets");
-                    if (Directory.Exists(srcAssets))
+                    var tagsArray = new JsonArray();
+                    foreach (var t in validTags)
                     {
-                        CopyDirectory(srcAssets, Path.Combine(stagingDir, "Assets"));
+                        tagsArray.Add(t);
                     }
+                    pkgObj["keywords"] = tagsArray.DeepClone();
+                    pkgObj["tags"] = tagsArray;
+                }
 
-                    // 3. Copy Packages directory (manifest.json)
-                    var srcPackages = Path.Combine(sourceProject.Path, "Packages");
-                    if (Directory.Exists(srcPackages))
+                // Extract dependencies from source project's Packages/manifest.json if available.
+                // Unity Hub's isValidPackage() requires the "dependencies" key to exist in
+                // package.json — without it, Hub considers the manifest invalid and falls back
+                // to reading from inside the .tgz, ignoring any edits to the outer file.
+                var manifestPath = Path.Combine(sourceProject.Path, "Packages", "manifest.json");
+                JsonObject? clonedDeps = null;
+                if (File.Exists(manifestPath))
+                {
+                    try
                     {
-                        CopyDirectory(srcPackages, Path.Combine(stagingDir, "Packages"));
-                    }
-
-                    // 4. Copy ProjectSettings if selected
-                    if (keepProjectSettings)
-                    {
-                        var srcSettings = Path.Combine(sourceProject.Path, "ProjectSettings");
-                        if (Directory.Exists(srcSettings))
+                        var manifestNode = JsonNode.Parse(File.ReadAllText(manifestPath));
+                        if (manifestNode?["dependencies"] is JsonObject depsObj)
                         {
-                            CopyDirectory(srcSettings, Path.Combine(stagingDir, "ProjectSettings"));
+                            clonedDeps = depsObj.DeepClone() as JsonObject;
                         }
                     }
+                    catch { }
+                }
+                pkgObj["dependencies"] = clonedDeps ?? new JsonObject();
 
-                    // 5. Copy the selected, safe root files using Unity Hub's limits.
-                    var copiedRootFiles = new List<string>();
-                    foreach (var rootFile in ResolveRootFiles(sourceProject.Path, includedRootFiles))
-                    {
-                        var destFilePath = Path.Combine(stagingDir, rootFile.FileName);
-                        File.Copy(rootFile.SourcePath, destFilePath, overwrite: true);
-                        copiedRootFiles.Add(rootFile.FileName);
-
-                        if (replaceProjectName)
-                        {
-                            TokenizeProjectName(destFilePath, Path.GetFileName(Path.TrimEndingDirectorySeparator(sourceProject.Path)));
-                        }
-                    }
+                    // Resolve selected root files before writing the manifest so the
+                    // metadata and archive always describe the same payload.
+                    var resolvedRootFiles = ResolveRootFiles(sourceProject.Path, includedRootFiles);
+                    var copiedRootFiles = resolvedRootFiles.Select(file => file.FileName).ToList();
 
                     if (copiedRootFiles.Count > 0)
                     {
@@ -244,16 +302,50 @@ public sealed class TemplateService
                     }
 
                     var packageJsonContent = pkgObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(Path.Combine(hubTemplateFolder, "package.json"), packageJsonContent);
 
-                    // 6. Save cover image if provided
+                    // Resolve the cover destination, but do not publish any template
+                    // metadata until the archive has been completed successfully.
                     string savedImagePath = string.Empty;
+                    string archiveImageName = string.Empty;
                     if (!string.IsNullOrWhiteSpace(customImagePath) && File.Exists(customImagePath))
+                    {
+                        var ext = Path.GetExtension(customImagePath).ToLowerInvariant();
+                        archiveImageName = $"{slug}{ext}";
+                        savedImagePath = Path.Combine(hubTemplateFolder, archiveImageName);
+                    }
+
+                    // Stream the source project directly into gzip. The former staging
+                    // + raw-tar pipeline required more than twice the project size in
+                    // %TEMP%, which failed for large projects on low-free-space drives.
+                    var tgzPath = Path.Combine(hubTemplateFolder, $"{slug}.tgz");
+                    var temporaryTgzPath = Path.Combine(hubTemplateFolder, $".{slug}.{Guid.NewGuid():N}.tmp");
+                    try
+                    {
+                        CreateTarGzFromProject(
+                            sourceProject.Path,
+                            temporaryTgzPath,
+                            packageJsonContent,
+                            customImagePath,
+                            archiveImageName,
+                            keepProjectSettings,
+                            resolvedRootFiles,
+                            replaceProjectName);
+                        File.Move(temporaryTgzPath, tgzPath, overwrite: true);
+                    }
+                    finally
+                    {
+                        if (File.Exists(temporaryTgzPath))
+                        {
+                            try { File.Delete(temporaryTgzPath); } catch { }
+                        }
+                    }
+
+                    File.WriteAllText(Path.Combine(hubTemplateFolder, "package.json"), packageJsonContent);
+                    if (!string.IsNullOrWhiteSpace(savedImagePath) &&
+                        !string.IsNullOrWhiteSpace(customImagePath))
                     {
                         try
                         {
-                            var ext = Path.GetExtension(customImagePath).ToLowerInvariant();
-                            savedImagePath = Path.Combine(hubTemplateFolder, $"{slug}{ext}");
                             File.Copy(customImagePath, savedImagePath, overwrite: true);
                         }
                         catch
@@ -262,18 +354,15 @@ public sealed class TemplateService
                         }
                     }
 
-                    // 7. Create .tgz tarball archive matching Unity Hub format
-                    var tgzPath = Path.Combine(hubTemplateFolder, $"{slug}.tgz");
-                    CreateTarGz(stagingDir, tgzPath, packageJsonContent, savedImagePath);
-
                     var info = new CustomTemplateInfo
                     {
                         Id = slug,
                         Name = name,
-                        Description = description,
-                        Version = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version,
+                        Description = normalizedDescription,
+                        Version = normalizedVersion,
                         EditorVersion = sourceProject.Version ?? "2022.3.0f1",
                         ImagePath = savedImagePath,
+                        Tags = validTags,
                         KeepProjectSettings = keepProjectSettings,
                         IncludedRootFiles = copiedRootFiles,
                         HasProjectNamePlaceholder = replaceProjectName && copiedRootFiles.Count > 0,
@@ -283,19 +372,32 @@ public sealed class TemplateService
                         CreatedAt = creationDate
                     };
 
-                    return info;
-                }
-                finally
-                {
-                    if (Directory.Exists(stagingDir))
+                    // Register in Unity Hub's templatesSettings.json sources map so
+                    // Unity Hub recognises this template without a manual rescan.
+                    try
                     {
-                        try { Directory.Delete(stagingDir, recursive: true); } catch { }
+                        new UnityHubTemplateSettingsService().RegisterTemplateSource(
+                            tgzPath,
+                            sourceProject.Path,
+                            sourceProject.Version ?? "");
                     }
-                }
+                    catch { }
+
+                    return info;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"SaveAsCustomTemplateAsync failed: {ex}");
+                try
+                {
+                    var slug = MakeSlug(name);
+                    var failedTemplateFolder = Path.Combine(_unityHubTemplatesDir, slug);
+                    if (Directory.Exists(failedTemplateFolder))
+                    {
+                        Directory.Delete(failedTemplateFolder, recursive: true);
+                    }
+                }
+                catch { }
                 return null;
             }
         });
@@ -306,7 +408,8 @@ public sealed class TemplateService
         string description,
         string version,
         string? replacementImagePath,
-        bool removeImage)
+        bool removeImage,
+        IEnumerable<string>? tags = null)
     {
         return await Task.Run(() =>
         {
@@ -338,8 +441,44 @@ public sealed class TemplateService
                 }
                 slug = MakeSlug(slug);
 
-                packageObject["description"] = description;
-                packageObject["version"] = version;
+                var normalizedVersion = string.IsNullOrWhiteSpace(version) ? (template.Version ?? "1.0.0") : version.Trim().TrimStart('v', 'V');
+                if (string.IsNullOrWhiteSpace(normalizedVersion)) normalizedVersion = "1.0.0";
+                var normalizedDescription = description?.Trim() ?? string.Empty;
+
+                packageObject["description"] = normalizedDescription;
+                packageObject["version"] = normalizedVersion;
+
+                var validTags = (tags ?? template.Tags ?? [])
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Select(t => t.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var tagsArray = new JsonArray();
+                foreach (var t in validTags)
+                {
+                    tagsArray.Add(t);
+                }
+                packageObject["keywords"] = tagsArray.DeepClone();
+                packageObject["tags"] = tagsArray;
+
+                // Unity Hub's isValidPackage() requires ALL of: name, displayName,
+                // version, unity, description, dependencies.  Ensure these keys are
+                // present so Hub reads the outer package.json instead of falling back
+                // to the (now stale) copy inside the .tgz archive.
+                if (packageObject["displayName"] is null)
+                {
+                    packageObject["displayName"] = packageObject["name"]?.GetValue<string>() ?? template.Name;
+                }
+                if (packageObject["unity"] is null)
+                {
+                    packageObject["unity"] = template.EditorVersion ?? "";
+                }
+                if (packageObject["dependencies"] is null)
+                {
+                    packageObject["dependencies"] = new JsonObject();
+                }
+
                 var packageJsonContent = packageObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 
                 var currentImagePath = FindTemplateImagePath(template.TemplateFolderPath, slug);
@@ -391,9 +530,20 @@ public sealed class TemplateService
                 WriteAllTextAtomically(packageJsonPath, packageJsonContent);
                 DeleteSupersededTemplateImages(template.TemplateFolderPath, slug, updatedImagePath);
 
-                template.Description = description;
-                template.Version = version;
+                // Notify Unity Hub's templatesSettings.json sources registry about the update
+                try
+                {
+                    if (File.Exists(tarballPath))
+                    {
+                        new UnityHubTemplateSettingsService().TouchTemplateSource(tarballPath);
+                    }
+                }
+                catch { }
+
+                template.Description = normalizedDescription;
+                template.Version = normalizedVersion;
                 template.ImagePath = updatedImagePath;
+                template.Tags = validTags;
                 template.TarballPath = File.Exists(tarballPath) ? tarballPath : string.Empty;
                 return template;
             }
@@ -466,6 +616,15 @@ public sealed class TemplateService
             var target = templates.FirstOrDefault(t => t.Id == templateId || MakeSlug(t.Name) == templateId);
             if (target is not null && Directory.Exists(target.TemplateFolderPath))
             {
+                if (!string.IsNullOrWhiteSpace(target.TarballPath))
+                {
+                    try
+                    {
+                        new UnityHubTemplateSettingsService().UnregisterTemplateSource(target.TarballPath);
+                    }
+                    catch { }
+                }
+
                 Directory.Delete(target.TemplateFolderPath, recursive: true);
             }
             return true;
@@ -670,49 +829,189 @@ public sealed class TemplateService
         }
     }
 
-    private static void CreateTarGz(
-        string templateFolderPath,
+    private static void CreateTarGzFromProject(
+        string projectPath,
         string outputTgzPath,
         string packageJsonContent,
-        string savedImagePath)
+        string? imageSourcePath,
+        string imageEntryFileName,
+        bool keepProjectSettings,
+        IReadOnlyList<RootFileCandidate> rootFiles,
+        bool replaceProjectName)
     {
-        var tempTarPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.tar");
-        try
+        using var targetStream = new FileStream(
+            outputTgzPath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 1024 * 1024,
+            FileOptions.SequentialScan);
+        using var gzipStream = new GZipStream(targetStream, CompressionLevel.Optimal, leaveOpen: false);
+        using var tarWriter = new TarWriter(gzipStream, TarEntryFormat.Pax, leaveOpen: false);
+
+        WriteMemoryEntry(
+            tarWriter,
+            "package/package.json",
+            Encoding.UTF8.GetBytes(packageJsonContent));
+
+        if (!string.IsNullOrWhiteSpace(imageSourcePath) &&
+            !string.IsNullOrWhiteSpace(imageEntryFileName) &&
+            File.Exists(imageSourcePath))
         {
-            using (var tarWriter = new TarWriter(File.Create(tempTarPath)))
+            WriteFileEntry(tarWriter, imageSourcePath, $"package/{imageEntryFileName}");
+        }
+
+        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Assets"), "Assets");
+        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Packages"), "Packages");
+        if (keepProjectSettings)
+        {
+            WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "ProjectSettings"), "ProjectSettings");
+        }
+
+        var sourceProjectName = Path.GetFileName(Path.TrimEndingDirectorySeparator(projectPath));
+        foreach (var rootFile in rootFiles)
+        {
+            var entryName = $"package/ProjectData~/{rootFile.FileName}";
+            if (replaceProjectName && TryGetTokenizedRootFile(rootFile, sourceProjectName, out var transformedBytes))
             {
-                var tempPkgJsonFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
-                File.WriteAllText(tempPkgJsonFile, packageJsonContent);
-                try
-                {
-                    tarWriter.WriteEntry(tempPkgJsonFile, "package/package.json");
-                }
-                finally
-                {
-                    if (File.Exists(tempPkgJsonFile)) File.Delete(tempPkgJsonFile);
-                }
+                WriteMemoryEntry(tarWriter, entryName, transformedBytes);
+            }
+            else
+            {
+                WriteFileEntry(tarWriter, rootFile.SourcePath, entryName);
+            }
+        }
+    }
 
-                if (!string.IsNullOrWhiteSpace(savedImagePath) && File.Exists(savedImagePath))
-                {
-                    tarWriter.WriteEntry(savedImagePath, $"package/{Path.GetFileName(savedImagePath)}");
-                }
+    private static void WriteProjectDirectory(TarWriter writer, string sourceDirectory, string archiveDirectory)
+    {
+        var root = new DirectoryInfo(sourceDirectory);
+        if (!root.Exists || root.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            return;
+        }
 
-                foreach (var file in Directory.GetFiles(templateFolderPath, "*.*", SearchOption.AllDirectories))
-                {
-                    var relPath = Path.GetRelativePath(templateFolderPath, file).Replace('\\', '/');
-                    var entryName = $"package/ProjectData~/{relPath}";
-                    tarWriter.WriteEntry(file, entryName);
-                }
+        WriteProjectDirectory(writer, root, archiveDirectory);
+    }
+
+    private static void WriteProjectDirectory(TarWriter writer, DirectoryInfo directory, string archiveDirectory)
+    {
+        FileInfo[] files;
+        try { files = directory.GetFiles(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+
+        foreach (var file in files.OrderBy(file => file.Name, StringComparer.Ordinal))
+        {
+            if (file.Name.StartsWith('.') ||
+                file.Name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+                file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                continue;
             }
 
-            using var rawTarStream = File.OpenRead(tempTarPath);
-            using var targetStream = File.Create(outputTgzPath);
-            using var gzStream = new GZipStream(targetStream, CompressionLevel.Optimal);
-            rawTarStream.CopyTo(gzStream);
+            WriteFileEntry(writer, file.FullName, $"package/ProjectData~/{archiveDirectory}/{file.Name}");
         }
-        finally
+
+        DirectoryInfo[] subdirectories;
+        try { subdirectories = directory.GetDirectories(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+
+        foreach (var subdirectory in subdirectories.OrderBy(directory => directory.Name, StringComparer.Ordinal))
         {
-            if (File.Exists(tempTarPath)) File.Delete(tempTarPath);
+            if (ShouldSkipTemplateDirectory(subdirectory))
+            {
+                continue;
+            }
+
+            WriteProjectDirectory(writer, subdirectory, $"{archiveDirectory}/{subdirectory.Name}");
+        }
+    }
+
+    private static bool ShouldSkipTemplateDirectory(DirectoryInfo directory)
+        => directory.Attributes.HasFlag(FileAttributes.ReparsePoint) ||
+           directory.Name.Equals("Library", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals("Temp", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals("Obj", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals("Logs", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals("Build", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals("Builds", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals(".git", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals(".vs", StringComparison.OrdinalIgnoreCase) ||
+           directory.Name.Equals(".idea", StringComparison.OrdinalIgnoreCase);
+
+    private static void WriteFileEntry(TarWriter writer, string sourcePath, string entryName)
+    {
+        FileStream sourceStream;
+        try
+        {
+            sourceStream = new FileStream(
+                sourcePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 1024 * 1024,
+                FileOptions.SequentialScan);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Skipped unreadable template file {sourcePath}: {ex.Message}");
+            return;
+        }
+
+        using (sourceStream)
+        {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, entryName)
+            {
+                DataStream = sourceStream,
+                ModificationTime = File.GetLastWriteTimeUtc(sourcePath)
+            };
+            writer.WriteEntry(entry);
+        }
+    }
+
+    private static void WriteMemoryEntry(TarWriter writer, string entryName, byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        var entry = new PaxTarEntry(TarEntryType.RegularFile, entryName)
+        {
+            DataStream = stream
+        };
+        writer.WriteEntry(entry);
+    }
+
+    private static bool TryGetTokenizedRootFile(
+        RootFileCandidate rootFile,
+        string sourceProjectName,
+        out byte[] transformedBytes)
+    {
+        transformedBytes = [];
+        if (rootFile.Size > MaximumPlaceholderFileBytes || string.IsNullOrWhiteSpace(sourceProjectName))
+        {
+            return false;
+        }
+
+        try
+        {
+            var bytes = File.ReadAllBytes(rootFile.SourcePath);
+            if (LooksLikeBinaryOrUtf16(bytes))
+            {
+                return false;
+            }
+
+            var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+            var original = utf8.GetString(bytes);
+            var transformed = Regex.Replace(
+                original,
+                $@"\b{Regex.Escape(sourceProjectName.Trim())}\b",
+                ProjectNameToken,
+                RegexOptions.CultureInvariant);
+            transformedBytes = utf8.GetBytes(transformed);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DecoderFallbackException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Skipped root-file placeholder substitution for {rootFile.SourcePath}: {ex.Message}");
+            return false;
         }
     }
 

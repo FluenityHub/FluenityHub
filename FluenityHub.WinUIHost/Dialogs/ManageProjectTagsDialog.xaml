@@ -16,36 +16,48 @@
     mc:Ignorable="d">
 
     <ContentDialog.Resources>
-        <x:Double x:Key="ContentDialogMaxWidth">520</x:Double>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TagDropIndicatorBrush" Color="#FF000000" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TagDropIndicatorBrush" Color="#FFFFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="TagDropIndicatorBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
 
-        <!-- Windows 11 Fluent Rename Tag Flyout -->
-        <Flyout x:Name="RenameTagFlyout" Placement="Bottom" Opened="OnRenameTagFlyoutOpened">
-            <StackPanel Width="230" Spacing="12">
-                <TextBlock
-                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                    Text="Rename Tag" />
-                <TextBox
-                    x:Name="RenameTagTextBox"
-                    Header="Tag name"
-                    MaxLength="24"
-                    AutomationProperties.Name="New tag name input"
-                    KeyDown="OnRenameTagKeyDown"
-                    PlaceholderText="Type tag name..." />
-                <StackPanel
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Button
-                        Click="OnCancelRenameTagClick"
-                        Content="Cancel"
-                        Style="{StaticResource SubtleButtonStyle}" />
-                    <Button
-                        Click="OnSaveRenameTagClick"
-                        Content="Save"
-                        Style="{StaticResource AccentButtonStyle}" />
+            <x:Double x:Key="ContentDialogMaxWidth">520</x:Double>
+            <Flyout x:Name="RenameTagFlyout" Placement="Bottom" Opened="OnRenameTagFlyoutOpened">
+                <StackPanel Width="230" Spacing="12">
+                    <TextBlock
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Rename Tag" />
+                    <TextBox
+                        x:Name="RenameTagTextBox"
+                        Header="Tag name"
+                        MaxLength="24"
+                        AutomationProperties.Name="New tag name input"
+                        KeyDown="OnRenameTagKeyDown"
+                        PlaceholderText="Type tag name..." />
+                    <StackPanel
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button
+                            Click="OnCancelRenameTagClick"
+                            Content="Cancel"
+                            Style="{StaticResource SubtleButtonStyle}" />
+                        <Button
+                            Click="OnSaveRenameTagClick"
+                            Content="Save"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
-        </Flyout>
+            </Flyout>
+        </ResourceDictionary>
     </ContentDialog.Resources>
 
     <StackPanel Width="460" Spacing="16">
@@ -228,6 +240,11 @@
                     DragLeave="OnTagCollectionDragLeave"
                     DragOver="OnAvailableTagsDragOver"
                     Drop="OnAvailableTagsDrop">
+                    <ItemsControl.ItemContainerTransitions>
+                        <TransitionCollection>
+                            <RepositionThemeTransition IsStaggeringEnabled="False" />
+                        </TransitionCollection>
+                    </ItemsControl.ItemContainerTransitions>
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
@@ -281,7 +298,7 @@
                         x:Name="AvailableTagDropIndicator"
                         Width="1"
                         Height="28"
-                        Background="{ThemeResource TextFillColorPrimaryBrush}"
+                        Background="{ThemeResource TagDropIndicatorBrush}"
                         CornerRadius="2"
                         Visibility="Collapsed" />
                 </Canvas>
@@ -336,6 +353,11 @@
                         DragLeave="OnTagCollectionDragLeave"
                         DragOver="OnActiveTagsDragOver"
                         Drop="OnActiveTagsDrop">
+                        <ItemsControl.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <RepositionThemeTransition IsStaggeringEnabled="False" />
+                            </TransitionCollection>
+                        </ItemsControl.ItemContainerTransitions>
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <custom:WrapPanel HorizontalSpacing="6" VerticalSpacing="6" />
@@ -390,7 +412,7 @@
                             x:Name="ActiveTagDropIndicator"
                             Width="1"
                             Height="26"
-                            Background="{ThemeResource TextFillColorPrimaryBrush}"
+                            Background="{ThemeResource TagDropIndicatorBrush}"
                             CornerRadius="2"
                             Visibility="Collapsed" />
                     </Canvas>

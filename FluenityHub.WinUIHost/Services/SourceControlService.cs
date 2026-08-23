@@ -19,12 +19,18 @@ public sealed class SourceControlService
     static SourceControlService()
     {
         HttpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("FluenityHub", "1.0"));
+        HttpClient.Timeout = TimeSpan.FromSeconds(20);
     }
 
     public async Task<(bool Success, string PrimaryOwner, List<string> Owners, string ErrorMessage)> AuthorizeTokenAsync(
         string provider,
         string token)
     {
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, string.Empty, [], NetworkConnectivityService.OfflineMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(token))
         {
             return (false, string.Empty, [], "Personal Access Token cannot be empty.");
@@ -115,7 +121,8 @@ public sealed class SourceControlService
         }
         catch (Exception ex)
         {
-            return (false, string.Empty, [], $"Connection error: {ex.Message}");
+            return (false, string.Empty, [],
+                NetworkConnectivityService.Current.GetUserMessage(ex, ProviderDisplayName(provider)));
         }
     }
 
@@ -128,6 +135,11 @@ public sealed class SourceControlService
         bool isPrivate,
         string description)
     {
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, string.Empty, NetworkConnectivityService.OfflineMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repoName))
         {
             return (false, string.Empty, "Token and repository name are required.");
@@ -213,7 +225,8 @@ public sealed class SourceControlService
         }
         catch (Exception ex)
         {
-            return (false, string.Empty, $"Error creating repository: {ex.Message}");
+            return (false, string.Empty,
+                NetworkConnectivityService.Current.GetUserMessage(ex, ProviderDisplayName(provider)));
         }
     }
 
@@ -241,6 +254,11 @@ public sealed class SourceControlService
 
     public async Task<(bool Success, List<RepositoryItem> Repositories, string ErrorMessage)> GetRepositoriesAsync(string provider, string token)
     {
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, [], NetworkConnectivityService.OfflineMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(token))
         {
             return (false, [], "Personal Access Token cannot be empty.");
@@ -319,12 +337,18 @@ public sealed class SourceControlService
         }
         catch (Exception ex)
         {
-            return (false, [], $"Error fetching repositories: {ex.Message}");
+            return (false, [],
+                NetworkConnectivityService.Current.GetUserMessage(ex, ProviderDisplayName(provider)));
         }
     }
 
     public async Task<(bool Success, List<BranchItem> Branches, string ErrorMessage)> GetBranchesAsync(string provider, string token, string repoFullName, string defaultBranch = "main")
     {
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, [new BranchItem(defaultBranch, string.Empty)], NetworkConnectivityService.OfflineMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repoFullName))
         {
             return (false, [], "Token and repository name are required.");
@@ -410,9 +434,15 @@ public sealed class SourceControlService
         }
         catch (Exception ex)
         {
-            return (false, [new BranchItem(defaultBranch, string.Empty)], $"Error fetching branches: {ex.Message}");
+            return (false, [new BranchItem(defaultBranch, string.Empty)],
+                NetworkConnectivityService.Current.GetUserMessage(ex, ProviderDisplayName(provider)));
         }
     }
+
+    private static string ProviderDisplayName(string provider)
+        => string.Equals(provider, "gitlab", StringComparison.OrdinalIgnoreCase)
+            ? "GitLab"
+            : "GitHub";
 }
 
 public sealed record RepositoryItem(string Name, string FullName, string CloneUrl, string DefaultBranch);

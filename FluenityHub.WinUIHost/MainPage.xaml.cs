@@ -155,11 +155,86 @@ public sealed partial class MainPage : Page
     public void OpenExternalProjectPath(string projectPath)
     {
         AppNavigationView.SelectedItem = FindNavigationItem("projects");
-        NavigateTopLevel(typeof(ProjectsPage), new EntranceNavigationTransitionInfo());
-        if (ContentFrame.Content is ProjectsPage projectsPage)
+        if (ContentFrame.Content is ProjectsPage activeProjectsPage)
         {
-            projectsPage.OpenExternalProjectPath(projectPath);
+            activeProjectsPage.OpenExternalProjectPath(projectPath);
+            return;
         }
+
+        NavigatedEventHandler? handler = null;
+        handler = (s, e) =>
+        {
+            ContentFrame.Navigated -= handler;
+            if (ContentFrame.Content is ProjectsPage page)
+            {
+                page.OpenExternalProjectPath(projectPath);
+            }
+        };
+        ContentFrame.Navigated += handler;
+        NavigateTopLevel(typeof(ProjectsPage), new EntranceNavigationTransitionInfo());
+    }
+
+    public void HandleExternalAction(string action)
+    {
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "new-project":
+            case "newproject":
+            case "new":
+                NavigateToNewProject();
+                break;
+
+            case "install-editor":
+            case "installs":
+            case "install":
+            case "editors":
+                NavigateToInstallEditor();
+                break;
+        }
+    }
+
+    public void NavigateToNewProject()
+    {
+        AppNavigationView.SelectedItem = FindNavigationItem("projects");
+        if (ContentFrame.Content is ProjectsPage activeProjectsPage)
+        {
+            activeProjectsPage.TriggerNewProjectFlow();
+            return;
+        }
+
+        NavigatedEventHandler? handler = null;
+        handler = (s, e) =>
+        {
+            ContentFrame.Navigated -= handler;
+            if (ContentFrame.Content is ProjectsPage page)
+            {
+                page.TriggerNewProjectFlow();
+            }
+        };
+        ContentFrame.Navigated += handler;
+        NavigateTopLevel(typeof(ProjectsPage), new EntranceNavigationTransitionInfo());
+    }
+
+    public void NavigateToInstallEditor()
+    {
+        AppNavigationView.SelectedItem = FindNavigationItem("editors");
+        if (ContentFrame.Content is EditorsPage activeEditorsPage)
+        {
+            activeEditorsPage.TriggerInstallEditorFlow();
+            return;
+        }
+
+        NavigatedEventHandler? handler = null;
+        handler = (s, e) =>
+        {
+            ContentFrame.Navigated -= handler;
+            if (ContentFrame.Content is EditorsPage page)
+            {
+                page.TriggerInstallEditorFlow();
+            }
+        };
+        ContentFrame.Navigated += handler;
+        NavigateTopLevel(typeof(EditorsPage), new EntranceNavigationTransitionInfo());
     }
 
     public void NavigateToProjectsFilteredByEditor(string editorVersion)

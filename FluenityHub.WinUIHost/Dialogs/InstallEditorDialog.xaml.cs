@@ -188,7 +188,9 @@ public sealed partial class InstallEditorDialog : ContentDialog
         catch (Exception ex)
         {
             Releases.Clear();
-            ShowError(ex.Message);
+            ShowError(NetworkConnectivityService.Current.GetUserMessage(
+                ex,
+                "Unity's release service"));
         }
         finally
         {

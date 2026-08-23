@@ -1,12 +1,28 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Serialization;
+using FluenityHub_WinUIHost.Helpers;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 
 namespace FluenityHub_WinUIHost.Models;
+
+public sealed class TemplateTagBadgeViewModel
+{
+    public string Name { get; }
+    public SolidColorBrush FillBrush { get; }
+    public SolidColorBrush DotBrush { get; }
+
+    public TemplateTagBadgeViewModel(string name)
+    {
+        Name = name;
+        DotBrush = TagColorHelper.GetSolidBrushForTag(name);
+        FillBrush = TagColorHelper.GetBadgeBackgroundBrushForTag(name);
+    }
+}
 
 public sealed class CustomTemplateInfo
 {
@@ -16,6 +32,7 @@ public sealed class CustomTemplateInfo
     public string Version { get; set; } = "1.0.0";
     public string EditorVersion { get; set; } = string.Empty;
     public string ImagePath { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = [];
     public bool KeepProjectSettings { get; set; } = true;
     public List<string> IncludedRootFiles { get; set; } = [];
     public bool HasProjectNamePlaceholder { get; set; }
@@ -25,7 +42,38 @@ public sealed class CustomTemplateInfo
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     [JsonIgnore]
+    public bool HasTags => Tags is { Count: > 0 };
+
+    [JsonIgnore]
+    public string PrimaryTag => HasTags ? Tags[0] : string.Empty;
+
+    [JsonIgnore]
+    public string TagBadgeLabel => Tags?.Count switch
+    {
+        null or 0 => string.Empty,
+        1 => Tags[0],
+        _ => $"{Tags[0]} +{Tags.Count - 1}"
+    };
+
+    [JsonIgnore]
+    public SolidColorBrush PrimaryTagColorBrush => TagColorHelper.GetSolidBrushForTag(PrimaryTag);
+
+    [JsonIgnore]
+    public SolidColorBrush PrimaryTagBadgeBrush => TagColorHelper.GetBadgeBackgroundBrushForTag(PrimaryTag);
+
+    [JsonIgnore]
+    public string TagsToolTip => HasTags
+        ? $"Tags: {string.Join(", ", Tags)}"
+        : "No tags set";
+
+    [JsonIgnore]
     public bool IsEditorInstalled { get; set; } = true;
+
+    [JsonIgnore]
+    public string DisplayVersion => string.IsNullOrWhiteSpace(Version) ? "1.0.0" : Version;
+
+    [JsonIgnore]
+    public string DisplayDescription => string.IsNullOrWhiteSpace(Description) ? "No description provided." : Description;
 
     [JsonIgnore]
     public bool IsEditorMissing => !IsEditorInstalled;

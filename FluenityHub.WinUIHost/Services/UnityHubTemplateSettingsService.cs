@@ -59,6 +59,100 @@ public sealed class UnityHubTemplateSettingsService
         WriteSettingsAtomically(settings);
     }
 
+    /// <summary>
+    /// Registers or updates a custom template in Unity Hub's <c>templatesSettings.json</c> <c>sources</c> map.
+    /// Unity Hub uses this map to track known templates, their source project paths,
+    /// and signing organization identifiers. Without this entry, Unity Hub may not
+    /// fully recognize templates created or updated outside of its own UI.
+    /// </summary>
+    public void RegisterTemplateSource(
+        string tgzPath,
+        string? sourceProjectPath = null,
+        string? editorVersion = null)
+    {
+        try
+        {
+            var settings = ReadSettings() ?? new JsonObject();
+            if (settings["sources"] is not JsonObject sources)
+            {
+                sources = new JsonObject();
+                settings["sources"] = sources;
+            }
+
+            var normalizedTgzPath = Path.GetFullPath(tgzPath);
+            var existing = sources[normalizedTgzPath] as JsonObject;
+
+            var finalProjectPath = !string.IsNullOrWhiteSpace(sourceProjectPath)
+                ? sourceProjectPath
+                : existing?["projectPath"]?.GetValue<string>() ?? string.Empty;
+
+            var finalEditorVersion = !string.IsNullOrWhiteSpace(editorVersion)
+                ? editorVersion
+                : existing?["editorVersion"]?.GetValue<string>() ?? string.Empty;
+
+            var signingOrgId = existing?["signingOrganizationId"]?.GetValue<string>();
+
+            var entry = new JsonObject
+            {
+                ["id"] = normalizedTgzPath,
+                ["projectPath"] = finalProjectPath,
+                ["path"] = normalizedTgzPath,
+                ["lastChecked"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                ["lastUsed"] = existing?["lastUsed"]?.GetValue<long>() ?? -1,
+                ["editorVersion"] = finalEditorVersion,
+                ["disabled"] = false
+            };
+
+            if (!string.IsNullOrWhiteSpace(signingOrgId))
+            {
+                entry["signingOrganizationId"] = signingOrgId;
+            }
+
+            sources[normalizedTgzPath] = entry;
+            WriteSettingsAtomically(settings);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"Failed to register template source in Unity Hub: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Removes a custom template from Unity Hub's <c>templatesSettings.json</c> <c>sources</c> map.
+    /// </summary>
+    public void UnregisterTemplateSource(string tgzPath)
+    {
+        try
+        {
+            var settings = ReadSettings();
+            if (settings?["sources"] is not JsonObject sources)
+            {
+                return;
+            }
+
+            var normalizedTgzPath = Path.GetFullPath(tgzPath);
+            if (sources.Remove(normalizedTgzPath))
+            {
+                WriteSettingsAtomically(settings);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"Failed to unregister template source in Unity Hub: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Bumps the <c>lastChecked</c> timestamp for a template in Unity Hub's <c>sources</c>,
+    /// signaling Unity Hub to refresh its cached data for the template.
+    /// </summary>
+    public void TouchTemplateSource(string tgzPath)
+    {
+        RegisterTemplateSource(tgzPath);
+    }
+
     private static JsonObject? ReadSettings()
     {
         if (!File.Exists(SettingsFilePath))

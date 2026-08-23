@@ -10,6 +10,9 @@ using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -108,10 +111,12 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         AdvancedTemplateOptionsExpander.Visibility = Visibility.Collapsed;
 
         TemplateNameTextBox.Text = _editingTemplate!.Name;
+        TemplateNameTextBox.IsEnabled = false;
         TemplateNameTextBox.IsReadOnly = true;
-        TemplateDescriptionTextBox.Text = _editingTemplate.Description;
-        TemplateVersionTextBox.Text = _editingTemplate.Version;
-        EditorVersionTextBox.Text = _editingTemplate.EditorVersion;
+        TemplateNameHintTextBlock.Visibility = Visibility.Visible;
+        TemplateDescriptionTextBox.Text = _editingTemplate.Description ?? string.Empty;
+        TemplateVersionTextBox.Text = string.IsNullOrWhiteSpace(_editingTemplate.Version) ? "1.0.0" : _editingTemplate.Version;
+        EditorVersionTextBox.Text = _editingTemplate.EditorVersion ?? string.Empty;
         EditorVersionTextBox.IsEnabled = false;
         EditorMissingWarningPanel.Visibility = Visibility.Collapsed;
 
@@ -243,6 +248,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                 var files = Directory.GetFiles(project.Path, "*.*", SearchOption.TopDirectoryOnly)
                     .Select(Path.GetFileName)
                     .Where(f => !string.IsNullOrEmpty(f) && !f.StartsWith("."))
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
                 RootFilesComboBox.ItemsSource = files;
@@ -342,84 +348,62 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
 
     private void OnRootFilesComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (RootFilesComboBox.SelectedItem is string selectedFile && !_selectedRootFiles.Contains(selectedFile))
+        if (sender is not ComboBox comboBox)
         {
-            var verticalOffset = DialogContentScrollViewer.VerticalOffset;
-            _selectedRootFiles.Add(selectedFile);
-            UpdateSelectedRootFilesState();
-            RestoreDialogScrollOffsetAfterLayout(verticalOffset);
+            return;
         }
 
-        RootFilesComboBox.SelectedIndex = -1;
+        var selectedFile = e.AddedItems.FirstOrDefault() as string ?? comboBox.SelectedItem as string;
+        if (!string.IsNullOrEmpty(selectedFile) &&
+            RootFileSelectionService.TryAdd(_selectedRootFiles, selectedFile))
+        {
+            UpdateSelectedRootFilesState();
+        }
+
+        if (comboBox.SelectedIndex != -1)
+        {
+            ResetRootFilesComboBoxAfterCommit(comboBox);
+        }
+    }
+
+    private void OnRootFilesComboBoxTextSubmitted(
+        ComboBox sender,
+        ComboBoxTextSubmittedEventArgs args)
+    {
+        args.Handled = true;
+
+        var submittedText = args.Text?.Trim();
+        var matchingFile = (sender.ItemsSource as IEnumerable<string>)?
+            .FirstOrDefault(file => string.Equals(
+                file,
+                submittedText,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (matchingFile is not null &&
+            RootFileSelectionService.TryAdd(_selectedRootFiles, matchingFile))
+        {
+            UpdateSelectedRootFilesState();
+        }
+
+        ResetRootFilesComboBoxAfterCommit(sender);
+    }
+
+    private void ResetRootFilesComboBoxAfterCommit(ComboBox comboBox)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            comboBox.SelectedIndex = -1;
+            comboBox.Text = string.Empty;
+        });
     }
 
     private void OnRemoveRootFileClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: string fileName })
         {
-            var verticalOffset = DialogContentScrollViewer.VerticalOffset;
             _selectedRootFiles.Remove(fileName);
             UpdateSelectedRootFilesState();
-            RestoreDialogScrollOffsetAfterLayout(verticalOffset);
         }
-    }
-
-
-    private void OnAdvancedExpanderExpanding(Expander sender, ExpanderExpandingEventArgs args)
-    {
-        var verticalOffset = DialogContentScrollViewer.VerticalOffset;
-        RestoreDialogScrollOffsetAfterLayout(verticalOffset);
-    }
-
-    private void OnAdvancedExpanderCollapsed(Expander sender, ExpanderCollapsedEventArgs args)
-    {
-        var verticalOffset = DialogContentScrollViewer.VerticalOffset;
-        RestoreDialogScrollOffsetAfterLayout(verticalOffset);
-    }
-
-    private void RestoreDialogScrollOffsetAfterLayout(double verticalOffset)
-    {
-        _ = RestoreDialogScrollOffsetAfterLayoutAsync(verticalOffset);
-    }
-
-    private Task RestoreDialogScrollOffsetAfterLayoutAsync(double verticalOffset)
-    {
-        var completion = new TaskCompletionSource<bool>();
-
-        if (!DispatcherQueue.TryEnqueue(() =>
-        {
-            ApplyDialogScrollOffset(verticalOffset);
-
-            // Focus restoration and Expander layout can each enqueue a later
-            // bring-into-view pass. Apply the saved offset after both turns.
-            if (!DispatcherQueue.TryEnqueue(() =>
-            {
-                ApplyDialogScrollOffset(verticalOffset);
-                completion.TrySetResult(true);
-            }))
-            {
-                completion.TrySetResult(false);
-            }
-        }))
-        {
-            completion.TrySetResult(false);
-        }
-
-        return completion.Task;
-    }
-
-    private void ApplyDialogScrollOffset(double verticalOffset)
-    {
-        DialogContentScrollViewer.UpdateLayout();
-
-        var maximumVerticalOffset = Math.Max(
-            0,
-            DialogContentScrollViewer.ExtentHeight - DialogContentScrollViewer.ViewportHeight);
-        DialogContentScrollViewer.ChangeView(
-            horizontalOffset: null,
-            verticalOffset: Math.Min(verticalOffset, maximumVerticalOffset),
-            zoomFactor: null,
-            disableAnimation: true);
     }
 
     private void UpdateSelectedRootFilesState()
@@ -495,17 +479,15 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
             return "A template with this name already exists. Choose a different name or update your templates location in Settings.";
         }
 
-        if (string.IsNullOrWhiteSpace(TemplateDescriptionTextBox?.Text))
+        var version = TemplateVersionTextBox?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(version))
         {
-            return "Enter a template description.";
+            return "Enter a template version.";
         }
 
-        var version = TemplateVersionTextBox?.Text?.Trim() ?? string.Empty;
-        if (!Regex.IsMatch(
-                version,
-                @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"))
+        if (!IsValidVersion(version))
         {
-            return "Enter a valid semantic version, such as 1.0.0 or 2.1.3-alpha.1.";
+            return "Enter a valid version, such as 1.0.0, 1.0, or 2.1.3-alpha.1.";
         }
 
         if (_isStep1)
@@ -547,6 +529,15 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         }
 
         return null;
+    }
+
+    private static bool IsValidVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return false;
+        var trimmed = version.Trim().TrimStart('v', 'V');
+        return Regex.IsMatch(
+            trimmed,
+            @"^(0|[1-9]\d*)(\.(0|[1-9]\d*)){1,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$");
     }
 
     private void UpdateWizardStepUI()
@@ -781,15 +772,15 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
 
     private async void OnBrowseCoverImageClick(object sender, RoutedEventArgs e)
     {
-        var originalVerticalOffset = DialogContentScrollViewer.VerticalOffset;
+        if (MainWindow.Instance is null)
+        {
+            return;
+        }
+
+        FrameworkElement focusRestoreTarget = BrowseCoverImageButton;
 
         try
         {
-            if (MainWindow.Instance is null) return;
-
-            BrowseCoverImageButton.Focus(FocusState.Programmatic);
-            await RestoreDialogScrollOffsetAfterLayoutAsync(originalVerticalOffset);
-
             var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(
                 MainWindow.Instance.AppWindow.Id)
             {
@@ -808,6 +799,10 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
             if (file is not null)
             {
                 SetCoverImage(file.Path);
+                if (CoverImagePreviewContainer.Visibility == Visibility.Visible)
+                {
+                    focusRestoreTarget = CoverImagePreviewContainer;
+                }
             }
         }
         catch (Exception ex)
@@ -816,11 +811,10 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         }
         finally
         {
-            // Re-establish the picker launch control as the focus anchor before
-            // restoring the viewport. ContentDialog re-measures when its native
-            // child window closes and can otherwise restore an earlier field.
-            BrowseCoverImageButton.Focus(FocusState.Programmatic);
-            await RestoreDialogScrollOffsetAfterLayoutAsync(originalVerticalOffset);
+            if (focusRestoreTarget.Visibility == Visibility.Visible)
+            {
+                focusRestoreTarget.Focus(FocusState.Programmatic);
+            }
         }
     }
 
@@ -967,8 +961,8 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                 ErrorBanner.Message = duplicateName
                     ? "A template with this name already exists. Choose a different name or update your templates location in Settings."
                     : _isEditMode
-                        ? "Enter a template Name, Description, and Version."
-                        : "Please select a source project and enter a template Name, Description, and Version.";
+                        ? "Enter a valid template Name and Version."
+                        : "Please select a source project and enter a template Name and Version.";
                 ErrorBanner.IsOpen = true;
                 return;
             }
@@ -1009,11 +1003,13 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
 
             var name = TemplateNameTextBox.Text.Trim();
             var description = TemplateDescriptionTextBox.Text.Trim();
-            var version = TemplateVersionTextBox.Text.Trim();
+            var version = TemplateVersionTextBox.Text.Trim().TrimStart('v', 'V');
+            if (string.IsNullOrWhiteSpace(version)) version = "1.0.0";
             var keepSettings = KeepProjectSettingsCheckBox.IsChecked == true;
 
             var includedRootFiles = _selectedRootFiles.ToList();
             var replaceProjectName = ReplaceNamePlaceholderCheckBox.IsChecked == true;
+            var templateTags = _isEditMode ? _editingTemplate?.Tags : sourceProject?.Tags;
 
             var providerTag = GetSelectedSourceControlProvider();
             bool isPrivate = PrivateVisibilityRadioButton?.IsChecked == true;
@@ -1039,7 +1035,8 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                         description,
                         version,
                         _customImagePath,
-                        _removeExistingImage);
+                        _removeExistingImage,
+                        templateTags);
                 }
                 else
                 {
@@ -1051,7 +1048,8 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                         _customImagePath,
                         keepSettings,
                         includedRootFiles,
-                        replaceProjectName);
+                        replaceProjectName,
+                        templateTags);
                 }
 
                 if (ResultTemplate is not null && providerTag != "none")

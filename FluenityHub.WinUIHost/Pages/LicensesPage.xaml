@@ -181,8 +181,6 @@
                 Margin="0,8,0,0"
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="On this device" />
-
-            <!-- License status expander — mirrors Windows 11 System > Activation layout -->
             <controls:SettingsExpander
                 x:Name="LicenseExpander"
                 Description="Checking license status"

@@ -109,7 +109,10 @@ public sealed partial class AddModulesDialog : ContentDialog
         => value ? Visibility.Visible : Visibility.Collapsed;
 
     public static string ModuleActionsAutomationName(string moduleName)
-        => $"Manage {moduleName}";
+        => "More options";
+
+    public static string ModuleActionsToolTip(string moduleName)
+        => "More options";
 
     public static FontWeight ModuleFontWeight(bool isCategory)
         => isCategory ? FontWeights.SemiBold : FontWeights.Normal;
@@ -226,25 +229,19 @@ public sealed partial class AddModulesDialog : ContentDialog
             + selectedModules.Sum(module => module.InstalledSizeBytes);
         var availableBytes = _moduleService.GetAvailableDiskSpace(_editor.InstallDirectory);
         var agreements = BuildLicenseTerms(selectedModules);
+        var storageError = GetEditorInstallStorageError();
 
         RequiredSizeRun.Text = FormatBytes(requiredBytes);
         PrimaryButtonText = agreements.Count > 0 ? "Next" : "Install";
-        IsPrimaryButtonEnabled =
-            (_installsEditor || selectedModules.Count > 0)
-            && requiredBytes <= availableBytes;
+        IsPrimaryButtonEnabled = _installsEditor || selectedModules.Count > 0;
 
-        if (requiredBytes > availableBytes)
-        {
-            ShowStatus(
-                "Not enough disk space",
-                "Free additional space or select fewer modules.",
-                InfoBarSeverity.Warning);
-        }
-        else if (StatusInfoBar.Title == "Not enough disk space")
+        if (StatusInfoBar.Title is "Not enough disk space" or "Not enough temporary disk space")
         {
             StatusInfoBar.IsOpen = false;
         }
     }
+
+    private string? GetEditorInstallStorageError() => null;
 
     private async void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
@@ -254,6 +251,14 @@ public sealed partial class AddModulesDialog : ContentDialog
         {
             if (_stage == DialogStage.ModuleSelection)
             {
+                var storageError = GetEditorInstallStorageError();
+                if (storageError is not null)
+                {
+                    ShowStatus("Not enough temporary disk space", storageError, InfoBarSeverity.Warning);
+                    IsPrimaryButtonEnabled = false;
+                    return;
+                }
+
                 var selectedModules = GetSelectedModules();
                 if (!_installsEditor && selectedModules.Count == 0)
                 {
@@ -414,7 +419,8 @@ public sealed partial class AddModulesDialog : ContentDialog
             }
 
             ShowAgreementContent(term, null);
-            AgreementInfoBar.Message = $"The full license text could not be loaded. {ex.Message}";
+            AgreementInfoBar.Message =
+                $"The full license text could not be loaded. {NetworkConnectivityService.Current.GetUserMessage(ex, "the license service")}";
             AgreementInfoBar.IsOpen = true;
         }
         finally
@@ -547,7 +553,9 @@ public sealed partial class AddModulesDialog : ContentDialog
             }
 
             ToolSetupProgressPanel.Visibility = Visibility.Collapsed;
-            ToolSetupInfoBar.Message = ex.Message;
+            ToolSetupInfoBar.Message = NetworkConnectivityService.Current.GetUserMessage(
+                ex,
+                "the Unity CLI download service");
             ToolSetupInfoBar.IsOpen = true;
             PrimaryButtonText = "Retry";
             IsPrimaryButtonEnabled = true;

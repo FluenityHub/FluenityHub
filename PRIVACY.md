@@ -1,7 +1,8 @@
 # Privacy Policy for FluenityHub
 
 **Effective Date:** August 14, 2026  
-**Last Updated:** August 14, 2026
+**Last Updated:** August 15, 2026  
+**Copyright:** Copyright © GID &amp; Contributors. Under GNU GPL v3.0 License. All rights reserved.
 
 
 ## Overview

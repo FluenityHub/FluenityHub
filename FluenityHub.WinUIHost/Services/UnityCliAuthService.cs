@@ -21,6 +21,17 @@ public sealed class UnityCliAuthService
             return CliUnavailableState();
         }
 
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return new UnityCliAuthState(
+                true,
+                false,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                NetworkConnectivityService.OfflineMessage);
+        }
+
         using var loginCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var loginTask = RunAuthCommandAsync(
             "login",

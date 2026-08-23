@@ -69,6 +69,11 @@
                     Click="OnGroupByOptionClick"
                     GroupName="GroupByGroup"
                     Text="Unity Version" />
+                <RadioMenuFlyoutItem
+                    x:Name="GroupByPlatformItem"
+                    Click="OnGroupByOptionClick"
+                    GroupName="GroupByGroup"
+                    Text="Target Platform" />
             </MenuFlyoutSubItem>
 
             <MenuFlyoutSeparator />
@@ -231,7 +236,7 @@
                                 x:Name="SortByPlatformItem"
                                 Click="OnSortOptionClick"
                                 GroupName="SortByGroup"
-                                Text="Platform" />
+                                Text="Target Platform" />
 
                             <MenuFlyoutSeparator />
 
@@ -278,8 +283,6 @@
             Margin="0,0,0,12"
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
             Style="{StaticResource CaptionTextBlockStyle}" />
-
-        <!-- WinUI 3 Elevated Card Container Background (PowerToys Hosts File Editor Style) -->
         <Border
             Grid.Row="3"
             Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -551,11 +554,6 @@
                                             DoubleTapped="OnProjectGroupHeaderDoubleTapped"
                                             Tag="{x:Bind}">
                                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                <FontIcon
-                                                    FontSize="14"
-                                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                                                    Glyph="{x:Bind HeaderGlyph, Mode=OneWay}"
-                                                    Visibility="{x:Bind local:ProjectsPage.HasGlyphToVisibility(HeaderGlyph), Mode=OneWay}" />
                                                 <TextBlock
                                                     Style="{StaticResource BodyStrongTextBlockStyle}"
                                                     Text="{x:Bind Key, Mode=OneWay}"
@@ -595,7 +593,6 @@
                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
                                 <Grid.ContextFlyout>
                                     <MenuFlyout>
-                                        <!-- Group 1: Opening & Explorer (Unity Hub order) -->
                                         <MenuFlyoutItem
                                             Click="OnContextOpenProjectClick"
                                             KeyboardAcceleratorTextOverride="Enter"
@@ -604,6 +601,9 @@
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE768;" />
                                             </MenuFlyoutItem.Icon>
+                                            <MenuFlyoutItem.KeyboardAccelerators>
+                                                <KeyboardAccelerator Key="Enter" />
+                                            </MenuFlyoutItem.KeyboardAccelerators>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem
                                             Click="OnContextOpenFolderClick"
@@ -613,6 +613,9 @@
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE8B7;" />
                                             </MenuFlyoutItem.Icon>
+                                            <MenuFlyoutItem.KeyboardAccelerators>
+                                                <KeyboardAccelerator Key="F" Modifiers="Control" />
+                                            </MenuFlyoutItem.KeyboardAccelerators>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem Click="OnContextCommandLineArgumentsClick" Text="Add command line arguments..." Tag="{x:Bind}">
                                             <MenuFlyoutItem.Icon>
@@ -708,6 +711,11 @@
                                                     <FontIcon Glyph="&#xE756;" />
                                                 </MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
+                                            <MenuFlyoutItem Click="OnContextLaunchUnityCliClick" Text="Launch Unity CLI" Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE756;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
                                             <MenuFlyoutSubItem
                                                 x:Name="OpenWithTargetPlatformSubItem"
                                                 Loaded="OnOpenWithTargetPlatformSubItemLoaded"
@@ -743,8 +751,6 @@
                                         </MenuFlyoutItem>
 
                                         <MenuFlyoutSeparator />
-
-                                        <!-- Group 4: Path & Destructive (Unity Hub bottom order) -->
                                         <MenuFlyoutItem
                                             Click="OnContextCopyPathClick"
                                             KeyboardAcceleratorTextOverride="Ctrl+Shift+C"
@@ -753,6 +759,9 @@
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE8C8;" />
                                             </MenuFlyoutItem.Icon>
+                                            <MenuFlyoutItem.KeyboardAccelerators>
+                                                <KeyboardAccelerator Key="C" Modifiers="Control,Shift" />
+                                            </MenuFlyoutItem.KeyboardAccelerators>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem Click="OnContextRenameProjectClick" Text="Rename" Tag="{x:Bind}">
                                             <MenuFlyoutItem.Icon>
@@ -767,6 +776,9 @@
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE74D;" />
                                             </MenuFlyoutItem.Icon>
+                                            <MenuFlyoutItem.KeyboardAccelerators>
+                                                <KeyboardAccelerator Key="Delete" />
+                                            </MenuFlyoutItem.KeyboardAccelerators>
                                         </MenuFlyoutItem>
                                     </MenuFlyout>
                                 </Grid.ContextFlyout>
@@ -850,6 +862,7 @@
                                                  <TextBlock
                                                      VerticalAlignment="Center"
                                                      FontSize="11"
+                                                     Margin="0,-1,0,0"
                                                      MaxWidth="130"
                                                      TextTrimming="CharacterEllipsis"
                                                      Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -875,6 +888,7 @@
                                                     Glyph="{x:Bind SourceControlIconGlyph, Mode=OneWay}" />
                                                 <TextBlock
                                                     FontSize="11"
+                                                    Margin="0,-1,0,0"
                                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                     Text="{x:Bind SourceControlLabel, Mode=OneWay}" />
                                             </StackPanel>
@@ -892,6 +906,7 @@
                                             <TextBlock
                                                 VerticalAlignment="Center"
                                                 FontSize="10"
+                                                Margin="0,-1,0,0"
                                                 Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                 Text="Editor missing" />
                                         </Border>

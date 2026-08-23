@@ -248,6 +248,13 @@ public sealed class GitService
                     return (false, "Remote URL must be a valid HTTPS or SSH Git URL.");
                 }
 
+                if (hasRemote
+                    && pushAllChanges
+                    && !NetworkConnectivityService.Current.CanAttemptInternet)
+                {
+                    return (false, NetworkConnectivityService.OfflineMessage);
+                }
+
                 // 1. Create Unity .gitignore if missing or empty
                 EnsureUnityGitIgnore(projectPath);
 
@@ -564,6 +571,11 @@ public sealed class GitService
 
     public static async Task<(bool Success, string Message)> CloneRepositoryAsync(string cloneUrl, string targetDirectory, string? branch = null)
     {
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, NetworkConnectivityService.OfflineMessage);
+        }
+
         if (string.IsNullOrWhiteSpace(cloneUrl) || string.IsNullOrWhiteSpace(targetDirectory))
         {
             return (false, "Repository URL and target location are required.");

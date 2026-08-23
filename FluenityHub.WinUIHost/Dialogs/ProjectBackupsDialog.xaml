@@ -31,6 +31,37 @@
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="models:ProjectBackupRecord">
                     <controls:SettingsCard Header="{x:Bind CreatedAtDisplay}">
+                        <controls:SettingsCard.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem
+                                    Click="OnRestoreBackupClick"
+                                    IsEnabled="{x:Bind IsAvailable}"
+                                    Tag="{x:Bind}"
+                                    Text="Restore backup as new project">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE753;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Click="OnOpenBackupClick"
+                                    IsEnabled="{x:Bind IsAvailable}"
+                                    Tag="{x:Bind}"
+                                    Text="Open backup folder">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE8B7;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Click="OnDeleteBackupClick"
+                                    Tag="{x:Bind}"
+                                    Text="{x:Bind DeleteActionText}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE74D;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </controls:SettingsCard.ContextFlyout>
                         <controls:SettingsCard.HeaderIcon>
                             <FontIcon Glyph="&#xE753;" />
                         </controls:SettingsCard.HeaderIcon>

@@ -665,7 +665,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             ShowUnityCliStatus(
-                $"Unable to install Unity CLI: {ex.Message}",
+                $"Unable to install Unity CLI: {NetworkConnectivityService.Current.GetUserMessage(ex, "the Unity CLI download service")}",
                 InfoBarSeverity.Error);
         }
         finally
@@ -722,6 +722,19 @@ public sealed partial class SettingsPage : Page
         {
             SetUnityCliBusy(false);
         }
+    }
+
+    private async void OnLaunchUnityCliClick(object sender, RoutedEventArgs e)
+    {
+        var targetTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            ?? MainWindow.Instance?.CurrentTheme
+            ?? ElementTheme.Default;
+
+        await UnityCliLaunchService.LaunchTerminalAsync(
+            null,
+            null,
+            XamlRoot,
+            targetTheme);
     }
 
     private void OnOpenUnityCliDocumentationClick(object sender, RoutedEventArgs e)
@@ -1089,6 +1102,46 @@ public sealed partial class SettingsPage : Page
     }
 
     private AppUpdateInfo? _settingsUpdateInfo;
+    private CancellationTokenSource? _settingsUpdateInfoBarCts;
+
+    private async void ShowSettingsUpdateInfoBar(
+        InfoBarSeverity severity,
+        string title,
+        string message,
+        bool showActions)
+    {
+        if (SettingsUpdateInfoBar is null) return;
+
+        _settingsUpdateInfoBarCts?.Cancel();
+        _settingsUpdateInfoBarCts?.Dispose();
+        _settingsUpdateInfoBarCts = new CancellationTokenSource();
+        var token = _settingsUpdateInfoBarCts.Token;
+
+        SettingsUpdateInfoBar.Severity = severity;
+        SettingsUpdateInfoBar.Title = title;
+        SettingsUpdateInfoBar.Message = message;
+
+        if (SettingsInstallUpdateBtn is not null)
+            SettingsInstallUpdateBtn.Visibility = showActions ? Visibility.Visible : Visibility.Collapsed;
+        if (SettingsSeeChangesBtn is not null)
+            SettingsSeeChangesBtn.Visibility = showActions ? Visibility.Visible : Visibility.Collapsed;
+
+        SettingsUpdateInfoBar.Visibility = Visibility.Visible;
+        SettingsUpdateInfoBar.IsOpen = true;
+
+        try
+        {
+            await Task.Delay(5000, token);
+            if (!token.IsCancellationRequested)
+            {
+                SettingsUpdateInfoBar.IsOpen = false;
+                SettingsUpdateInfoBar.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 
     private async void OnCheckUpdatesClick(object sender, RoutedEventArgs e)
     {
@@ -1105,43 +1158,40 @@ public sealed partial class SettingsPage : Page
             var updateInfo = await AppUpdateService.CheckForUpdatesAsync();
             _settingsUpdateInfo = updateInfo;
 
-            if (SettingsUpdateInfoBar is not null)
+            if (!string.IsNullOrWhiteSpace(updateInfo.ErrorMessage))
             {
-                if (updateInfo.HasUpdate)
-                {
-                    SettingsUpdateInfoBar.Severity = InfoBarSeverity.Success;
-                    SettingsUpdateInfoBar.Title = $"FluenityHub v{updateInfo.LatestVersion} is available";
-                    SettingsUpdateInfoBar.Message = string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
+                ShowSettingsUpdateInfoBar(
+                    InfoBarSeverity.Warning,
+                    "Unable to check for updates",
+                    updateInfo.ErrorMessage,
+                    showActions: false);
+            }
+            else if (updateInfo.HasUpdate)
+            {
+                ShowSettingsUpdateInfoBar(
+                    InfoBarSeverity.Success,
+                    $"FluenityHub v{updateInfo.LatestVersion} is available",
+                    string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
                         ? "A new version of FluenityHub is available with new features and performance improvements."
-                        : updateInfo.ReleaseTitle;
-
-                    if (SettingsInstallUpdateBtn is not null) SettingsInstallUpdateBtn.Visibility = Visibility.Visible;
-                    if (SettingsSeeChangesBtn is not null) SettingsSeeChangesBtn.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    SettingsUpdateInfoBar.Severity = InfoBarSeverity.Success;
-                    SettingsUpdateInfoBar.Title = "FluenityHub is up to date";
-                    SettingsUpdateInfoBar.Message = $"You are running the latest version (v{AppUpdateService.CurrentVersion}).";
-
-                    if (SettingsInstallUpdateBtn is not null) SettingsInstallUpdateBtn.Visibility = Visibility.Collapsed;
-                    if (SettingsSeeChangesBtn is not null) SettingsSeeChangesBtn.Visibility = Visibility.Collapsed;
-                }
-
-                SettingsUpdateInfoBar.IsOpen = true;
+                        : updateInfo.ReleaseTitle,
+                    showActions: true);
+            }
+            else
+            {
+                ShowSettingsUpdateInfoBar(
+                    InfoBarSeverity.Success,
+                    "FluenityHub is up to date",
+                    $"You are running the latest version (v{AppUpdateService.CurrentVersion}).",
+                    showActions: false);
             }
         }
         catch (Exception ex)
         {
-            if (SettingsUpdateInfoBar is not null)
-            {
-                SettingsUpdateInfoBar.Severity = InfoBarSeverity.Error;
-                SettingsUpdateInfoBar.Title = "Unable to check for updates";
-                SettingsUpdateInfoBar.Message = ex.Message;
-                if (SettingsInstallUpdateBtn is not null) SettingsInstallUpdateBtn.Visibility = Visibility.Collapsed;
-                if (SettingsSeeChangesBtn is not null) SettingsSeeChangesBtn.Visibility = Visibility.Collapsed;
-                SettingsUpdateInfoBar.IsOpen = true;
-            }
+            ShowSettingsUpdateInfoBar(
+                InfoBarSeverity.Error,
+                "Unable to check for updates",
+                ex.Message,
+                showActions: false);
         }
         finally
         {
@@ -1169,9 +1219,7 @@ public sealed partial class SettingsPage : Page
 
     private void OnSettingsUpdateInfoBarClosed(InfoBar sender, InfoBarClosedEventArgs args)
     {
-        if (SettingsUpdateInfoBar is not null)
-        {
-            SettingsUpdateInfoBar.IsOpen = false;
-        }
+        _settingsUpdateInfoBarCts?.Cancel();
+        sender.Visibility = Visibility.Collapsed;
     }
 }

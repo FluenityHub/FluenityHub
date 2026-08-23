@@ -105,24 +105,21 @@ public sealed partial class EditorIntegrityDialog : ContentDialog
                 var dp = new DataPackage();
                 dp.SetText(string.Join(Environment.NewLine, _lastReport.DiagnosticLogs));
                 Clipboard.SetContent(dp);
-
-                // Give the copy action a short visual confirmation.
                 CopyButtonPulseAnimation.Begin();
-
-                CopyLogFontIcon.Glyph = "\uE73E"; // Checkmark icon
+                CopyLogFontIcon.Glyph = "\uE73E";
                 CopyLogTextBlock.Text = "Copied!";
                 ToolTipService.SetToolTip(CopyLogButton, "Copied to clipboard!");
 
                 await Task.Delay(2000);
 
-                CopyLogFontIcon.Glyph = "\uE8C8"; // Copy icon
+                CopyLogFontIcon.Glyph = "\uE8C8";
                 CopyLogTextBlock.Text = "Copy log";
                 ToolTipService.SetToolTip(CopyLogButton, "Copy diagnostic log to clipboard");
             }
         }
         catch
         {
-            // A clipboard failure should not hide the diagnostic result.
+            // Ignore clipboard access errors
         }
     }
 
@@ -140,7 +137,7 @@ public sealed partial class EditorIntegrityDialog : ContentDialog
                 bool success = await _integrityService.RepairInstallationAsync(_editor, _lastReport);
                 if (success)
                 {
-                    // Refresh the report so the repaired state is visible.
+                    // Re-run diagnostic check after repair
                     _lastReport = await _integrityService.CheckIntegrityAsync(_editor);
                     PopulateRichTextLogs(_lastReport.DiagnosticLogs);
 

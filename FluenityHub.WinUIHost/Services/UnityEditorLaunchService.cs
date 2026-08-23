@@ -71,114 +71,74 @@ public sealed class UnityEditorLaunchService
             return new(false, $"Project path not found: {projectPath}");
         }
 
-        if (!UnitySharedAuthService.TryGetActiveAccessToken(out var sharedToken, out var authError)
-            || sharedToken is null)
+        // Best-effort token acquisition:
+        // 1. If an active, non-expired token is present, use it.
+        // 2. If token is near expiration and we can reach internet, attempt silent OAuth refresh.
+        // 3. If no token, expired, or offline, do NOT force browser login — launch immediately in offline mode.
+        UnitySharedAccessToken? sharedToken = null;
+        if (UnitySharedAuthService.TryGetActiveAccessToken(out var candidateToken, out _)
+            && candidateToken is not null)
         {
-            UnityEditorLaunchDiagnostics.Write(
-                "Auth",
-                $"Shared credential is unavailable; checking Unity CLI session state. Reason: {authError}");
-
-            if (UnitySharedAuthService.TryIsHubAccountActive(out var hubOwnsSession, out _)
-                && hubOwnsSession)
+            if (TryGetTokenExpiration(candidateToken, out var tokenExpiration)
+                && tokenExpiration > DateTimeOffset.UtcNow + TokenRefreshWindow)
             {
-                return new(false,
-                    "Unity Hub owns the active account, but its shared credential is unavailable. Finish signing in to Unity Hub, then retry.");
+                sharedToken = candidateToken;
+                UnityEditorLaunchDiagnostics.Write(
+                    "Auth",
+                    candidateToken.Expiration is double expiration
+                        ? $"Active account loaded; token expiry={DateTimeOffset.FromUnixTimeMilliseconds((long)expiration):O}."
+                        : "Active account loaded; token expiry was not provided.");
             }
-
-            UnityCliAuthState cliState;
-            try
+            else if (NetworkConnectivityService.Current.CanAttemptInternet)
             {
-                cliState = await _cliAuthService.GetStatusAsync(cancellationToken);
-                if (!cliState.IsLoggedIn)
+                UnityEditorLaunchDiagnostics.Write(
+                    "Auth",
+                    "Access token is expired or nearing expiry; attempting background OAuth refresh.");
+
+                try
                 {
-                    UnityEditorLaunchDiagnostics.Write(
-                        "Auth",
-                        cliState.RequiresReauthentication
-                            ? "Unity CLI session is stale; starting secure reauthentication."
-                            : "Unity CLI has no usable session; starting secure authentication.");
-                    cliState = await _cliAuthService.LoginAsync(cancellationToken);
+                    var (refreshedToken, refreshError) = await WaitForSharedAccessTokenAsync(cancellationToken);
+                    if (refreshedToken is not null
+                        && TryGetTokenExpiration(refreshedToken, out var refreshedExp)
+                        && refreshedExp > DateTimeOffset.UtcNow)
+                    {
+                        sharedToken = refreshedToken;
+                        UnityEditorLaunchDiagnostics.Write("Auth", "Unity OAuth refreshed the access token.");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(refreshError))
+                    {
+                        UnityEditorLaunchDiagnostics.Write("Auth", $"OAuth refresh result: {refreshError}");
+                    }
+                }
+                catch
+                {
+                    // Best-effort refresh failure should never block launching the project.
                 }
             }
-            catch (OperationCanceledException)
+        }
+        else if (NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            try
             {
-                UnityEditorLaunchDiagnostics.Write("Auth", "Unity CLI authentication was canceled.");
-                return new(false, "Opening the Unity project was canceled.");
+                var (refreshedToken, _) = await WaitForSharedAccessTokenAsync(cancellationToken);
+                if (refreshedToken is not null)
+                {
+                    sharedToken = refreshedToken;
+                    UnityEditorLaunchDiagnostics.Write("Auth", "Unity OAuth refreshed the access token from stored credentials.");
+                }
             }
-
-            if (!cliState.IsLoggedIn)
+            catch
             {
-                var message = !string.IsNullOrWhiteSpace(cliState.Message)
-                    ? cliState.Message
-                    : "Sign in to Unity and try opening the project again.";
-                UnityEditorLaunchDiagnostics.Write("Auth", $"Authentication failed: {message}");
-                return new(false, message);
-            }
-
-            (sharedToken, authError) = await WaitForSharedAccessTokenAsync(cancellationToken);
-            if (sharedToken is null)
-            {
-                UnityEditorLaunchDiagnostics.Write("Auth", $"Credential synchronization failed: {authError}");
-                return new(false, authError);
+                // Best-effort refresh failure should never block launching the project.
             }
         }
 
-        if (!TryGetTokenExpiration(sharedToken, out var tokenExpiration)
-            || tokenExpiration <= DateTimeOffset.UtcNow + TokenRefreshWindow)
+        if (sharedToken is null)
         {
             UnityEditorLaunchDiagnostics.Write(
                 "Auth",
-                "Access token is expired, invalid, or nearing expiry; refreshing through Unity CLI.");
-            if (UnitySharedAuthService.TryIsHubAccountActive(out var hubOwnsSession, out _)
-                && hubOwnsSession)
-            {
-                return new(false,
-                    "Unity Hub is refreshing the active account. Wait a moment and retry so FluenityHub does not start a competing sign-in session.");
-            }
-
-            UnityCliAuthState cliState;
-            try
-            {
-                cliState = await _cliAuthService.GetStatusAsync(cancellationToken);
-                if (!cliState.IsLoggedIn)
-                {
-                    UnityEditorLaunchDiagnostics.Write(
-                        "Auth",
-                        cliState.RequiresReauthentication
-                            ? "Unity CLI session is stale; starting secure reauthentication."
-                            : "Unity CLI has no usable session; starting secure authentication.");
-                    cliState = await _cliAuthService.LoginAsync(cancellationToken);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                UnityEditorLaunchDiagnostics.Write("Auth", "Unity CLI token refresh was canceled.");
-                return new(false, "Opening the Unity project was canceled.");
-            }
-
-            var (refreshedToken, refreshError) = await WaitForSharedAccessTokenAsync(cancellationToken);
-            if (!cliState.IsLoggedIn
-                || refreshedToken is null
-                || !TryGetTokenExpiration(refreshedToken, out tokenExpiration)
-                || tokenExpiration <= DateTimeOffset.UtcNow)
-            {
-                var message = !string.IsNullOrWhiteSpace(refreshError)
-                    ? refreshError
-                    : !cliState.IsLoggedIn && !string.IsNullOrWhiteSpace(cliState.Message)
-                        ? cliState.Message
-                        : "Unity CLI reports a signed-in account, but the shared Editor token is expired. Sign in again and retry.";
-                UnityEditorLaunchDiagnostics.Write("Auth", $"Token refresh failed: {message}");
-                return new(false, message);
-            }
-
-            sharedToken = refreshedToken;
-            UnityEditorLaunchDiagnostics.Write("Auth", "Unity CLI refreshed the access token.");
+                "No active online session; launching Editor in offline mode.");
         }
-
-        UnityEditorLaunchDiagnostics.Write(
-            "Auth",
-            sharedToken.Expiration is double expiration
-                ? $"Active account loaded; token expiry={DateTimeOffset.FromUnixTimeMilliseconds((long)expiration):O}."
-                : "Active account loaded; token expiry was not provided.");
 
         UnityLicensingClientSession? licensingSession = null;
         UnityHubIpcGuard? hubIpcGuard = null;
@@ -196,7 +156,7 @@ public sealed class UnityEditorLaunchService
 
             var licensingResult = await UnityLicensingClientSession.StartAsync(
                 editorExecutable,
-                sharedToken.Value,
+                sharedToken?.Value,
                 cancellationToken);
             licensingSession = licensingResult.Session;
             if (licensingSession is null)
@@ -224,8 +184,11 @@ public sealed class UnityEditorLaunchService
             startInfo.ArgumentList.Add("production");
             startInfo.ArgumentList.Add("-hubSessionId");
             startInfo.ArgumentList.Add(Guid.NewGuid().ToString());
-            startInfo.ArgumentList.Add("-accessToken");
-            startInfo.ArgumentList.Add(sharedToken.Value);
+            if (!string.IsNullOrWhiteSpace(sharedToken?.Value))
+            {
+                startInfo.ArgumentList.Add("-accessToken");
+                startInfo.ArgumentList.Add(sharedToken.Value);
+            }
             startInfo.ArgumentList.Add("-licensingIpc");
             startInfo.ArgumentList.Add(licensingSession.EditorPipeName);
 
@@ -264,7 +227,12 @@ public sealed class UnityEditorLaunchService
             hubIpcGuard.AttachToEditor(editorProcess);
             hubIpcGuard = null;
             UnityEditorLaunchDiagnostics.Write("Launch", "Editor passed the startup check; services attached.");
-            return new(true, "Unity Editor is starting with the signed-in Unity account.", editorProcess);
+            return new(
+                true,
+                sharedToken is not null
+                    ? "Unity Editor is starting with the signed-in Unity account."
+                    : "Unity Editor is starting in offline mode.",
+                editorProcess);
         }
         catch (OperationCanceledException)
         {
@@ -297,8 +265,17 @@ public sealed class UnityEditorLaunchService
     private static async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
         WaitForSharedAccessTokenAsync(CancellationToken cancellationToken)
     {
-        const int maximumAttempts = 20;
-        var lastError = "The active Unity CLI credential could not be read. Sign in again and retry.";
+        // First, attempt silent background OAuth token refresh
+        var (refreshedToken, refreshError) = await UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken);
+        if (refreshedToken is not null)
+        {
+            return (refreshedToken, string.Empty);
+        }
+
+        const int maximumAttempts = 10;
+        var lastError = !string.IsNullOrWhiteSpace(refreshError)
+            ? refreshError
+            : "The active Unity CLI credential could not be read. Sign in again and retry.";
 
         for (var attempt = 0; attempt < maximumAttempts; attempt++)
         {
@@ -315,7 +292,7 @@ public sealed class UnityEditorLaunchService
 
             if (attempt < maximumAttempts - 1)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
             }
         }
 

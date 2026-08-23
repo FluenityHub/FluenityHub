@@ -114,6 +114,19 @@ public static class TagColorHelper
         return new SolidColorBrush(Color.FromArgb((byte)(255 * opacity), c.R, c.G, c.B));
     }
 
+    /// <summary>
+    /// Returns a 100% opaque (Alpha=255) tinted brush specifically calibrated for floating template badges
+    /// over cover media. Never transparent, completely blocks underlying artwork.
+    /// </summary>
+    public static SolidColorBrush GetBadgeBackgroundBrushForTag(string tag)
+    {
+        var c = GetColorForTag(tag);
+        byte r = (byte)Math.Clamp((int)(c.R * 0.65 + 32 * 0.35), 0, 255);
+        byte g = (byte)Math.Clamp((int)(c.G * 0.65 + 32 * 0.35), 0, 255);
+        byte b = (byte)Math.Clamp((int)(c.B * 0.65 + 32 * 0.35), 0, 255);
+        return new SolidColorBrush(Color.FromArgb(255, r, g, b));
+    }
+
     public static void SetTagColor(string tag, string colorKeyOrHex)
     {
         if (string.IsNullOrWhiteSpace(tag)) return;

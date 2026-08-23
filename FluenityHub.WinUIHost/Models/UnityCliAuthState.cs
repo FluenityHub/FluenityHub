@@ -13,5 +13,6 @@ public sealed record UnityCliAuthState(
     public bool RequiresReauthentication
         => IsCliAvailable
            && !IsLoggedIn
-           && SessionState.Equals("stale", StringComparison.OrdinalIgnoreCase);
+           && (SessionState.Equals("stale", StringComparison.OrdinalIgnoreCase)
+               || SessionState.Equals("expired", StringComparison.OrdinalIgnoreCase));
 }

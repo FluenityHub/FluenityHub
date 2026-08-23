@@ -185,7 +185,7 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
         }
         catch
         {
-            // The external browser is optional and should not block the dialog.
+            // Ignore shell errors
         }
     }
 

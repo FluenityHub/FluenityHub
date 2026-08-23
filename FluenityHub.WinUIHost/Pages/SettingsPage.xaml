@@ -42,8 +42,6 @@
             IsClosable="True"
             IsOpen="False"
             Visibility="Collapsed" />
-
-        <!-- Keep the settings content inside the available page width. -->
         <ScrollViewer
             Grid.Row="1"
             HorizontalScrollBarVisibility="Disabled"
@@ -114,9 +112,9 @@
                             SelectedIndex="0"
                             SelectionChanged="OnMinimizeBehaviorSelectionChanged">
                             <ComboBoxItem Content="Never" Tag="0" />
-                            <ComboBoxItem Content="when Unity Editor opens" Tag="1" />
-                            <ComboBoxItem Content="when Closing the Hub" Tag="2" />
-                            <ComboBoxItem Content="when Unity Editor opens or Closing the Hub" Tag="3" />
+                            <ComboBoxItem Content="Unity Editor opens" Tag="1" />
+                            <ComboBoxItem Content="Closing the Hub" Tag="2" />
+                            <ComboBoxItem Content="Unity Editor opens or Closing the Hub" Tag="3" />
                         </ComboBox>
                     </controls:SettingsCard>
 
@@ -236,6 +234,13 @@
                                 <FontIcon FontSize="14" Glyph="&#xE712;" />
                                 <Button.Flyout>
                                     <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuFlyoutItem
+                                            Click="OnLaunchUnityCliClick"
+                                            Text="Launch Unity CLI">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE756;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
                                         <MenuFlyoutItem
                                             Click="OnOpenUnityCliDocumentationClick"
                                             Text="Documentation">
@@ -636,7 +641,7 @@
                         Text="About" />
 
                     <controls:SettingsExpander
-                        Description="© 2026 FluenityHub. All rights reserved."
+                        Description="Copyright © GID &amp; Contributors. Under GNU GPL v3.0 License. All rights reserved."
                         Header="FluenityHub">
                         <controls:SettingsExpander.HeaderIcon>
                             <ImageIcon Source="ms-appx:///Assets/Square44x44Logo.targetsize-24.png" />
@@ -674,7 +679,7 @@
                                     <StackPanel Spacing="2">
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.4" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />
-                                        <HyperlinkButton Click="OnOpenCommunityToolkitClick" Content="Windows Community Toolkit" />
+                                         <HyperlinkButton Click="OnOpenCommunityToolkitClick" Content="Windows Community Toolkit" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content=".NET 10" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="System.Drawing.Common" />
                                     </StackPanel>

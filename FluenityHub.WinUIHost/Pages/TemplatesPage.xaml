@@ -15,6 +15,19 @@
             TargetType="ToggleMenuFlyoutItem">
             <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
         </Style>
+
+        <MenuFlyout x:Key="DisplayOptionsMenuFlyout" Placement="BottomEdgeAlignedRight">
+            <ToggleMenuFlyoutItem
+                x:Name="HideMissingEditorsItem"
+                Click="OnDisplayOptionClick"
+                IsChecked="False"
+                Text="Hide templates with missing editors" />
+
+            <MenuFlyoutSeparator />
+
+            <MenuFlyoutSubItem x:Name="EditorFilterSubItem" Text="Filter by Editor version" />
+            <MenuFlyoutSubItem x:Name="TagFilterSubItem" Text="Filter by tag" />
+        </MenuFlyout>
     </Page.Resources>
 
     <Grid Margin="36,24,36,24" Padding="0">
@@ -70,7 +83,7 @@
                 </Button>
             </StackPanel>
 
-            <!-- Right Group: New Template -->
+            <!-- Right Group: New Template, Display Options, Sort -->
             <StackPanel Grid.Column="1" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
                 <Button
                     x:Name="NewTemplateButton"
@@ -94,14 +107,10 @@
                     x:Name="DisplayOptionsDropDownButton"
                     Height="32"
                     VerticalAlignment="Center"
-                    AutomationProperties.Name="Filter templates by Editor version"
-                    Content="Editor version"
-                    ToolTipService.ToolTip="Filter by Editor version">
-                    <DropDownButton.Flyout>
-                        <MenuFlyout
-                            x:Name="EditorVersionFilterFlyout"
-                            Placement="BottomEdgeAlignedLeft" />
-                    </DropDownButton.Flyout>
+                    AutomationProperties.Name="Display options"
+                    Flyout="{StaticResource DisplayOptionsMenuFlyout}"
+                    ToolTipService.ToolTip="Display options">
+                    <FontIcon FontSize="14" Glyph="&#xE71C;" />
                 </DropDownButton>
 
                 <DropDownButton
@@ -216,6 +225,15 @@
                                             <FontIcon Glyph="&#xE710;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnInstallMissingEditorClick"
+                                        Tag="{x:Bind}"
+                                        Text="Install missing Editor..."
+                                        Visibility="{x:Bind IsEditorMissing}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE896;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
                                     <MenuFlyoutSeparator />
                                     <MenuFlyoutItem
                                         Click="OnEditTemplateClick"
@@ -225,6 +243,15 @@
                                             <FontIcon Glyph="&#xE70F;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnManageTemplateTagsClick"
+                                        Tag="{x:Bind}"
+                                        Text="Manage tags...">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE8EC;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator />
                                     <MenuFlyoutItem
                                         Click="OnShowInExplorerClick"
                                         Tag="{x:Bind}"
@@ -239,7 +266,7 @@
                                         Tag="{x:Bind}"
                                         Text="Delete">
                                         <MenuFlyoutItem.Icon>
-                                            <FontIcon Glyph="&#xE74D;" />
+                                            <FontIcon Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE74D;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
                                 </MenuFlyout>
@@ -301,6 +328,8 @@
                                         Padding="6,2"
                                         VerticalAlignment="Center"
                                         Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
                                         CornerRadius="{ThemeResource ControlCornerRadius}">
                                         <TextBlock
                                             VerticalAlignment="Center"
@@ -309,6 +338,37 @@
                                             Text="{x:Bind EditorVersion}" />
                                     </Border>
 
+                                    <!-- Tag Badge with '+N' overflow (identical to ProjectsPage) -->
+                                    <Border
+                                        Padding="6,2"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind PrimaryTagBadgeBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{ThemeResource ControlCornerRadius}"
+                                        ToolTipService.ToolTip="{x:Bind TagsToolTip}"
+                                        Visibility="{x:Bind HasTags}">
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="4"
+                                            VerticalAlignment="Center">
+                                            <Ellipse
+                                                Width="7"
+                                                Height="7"
+                                                VerticalAlignment="Center"
+                                                Fill="{x:Bind PrimaryTagColorBrush}" />
+                                            <TextBlock
+                                                FontSize="10"
+                                                MaxWidth="110"
+                                                Margin="0,-1,0,0"
+                                                TextTrimming="CharacterEllipsis"
+                                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                Text="{x:Bind TagBadgeLabel}"
+                                                VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Editor Missing Caution Badge -->
                                     <Border
                                         Padding="6,2"
                                         VerticalAlignment="Center"
@@ -336,6 +396,7 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock
+                                            IsTextSelectionEnabled="True"
                                             MaxLines="1"
                                             Style="{StaticResource BodyStrongTextBlockStyle}"
                                             Text="{x:Bind Name}"
@@ -349,21 +410,22 @@
                                             <TextBlock
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 Style="{StaticResource CaptionTextBlockStyle}"
-                                                Text="{x:Bind Version}" />
+                                                Text="{x:Bind DisplayVersion}" />
                                         </Border>
                                     </Grid>
 
                                     <TextBlock
                                         Grid.Row="1"
                                         Margin="0,2,0,6"
+                                        IsTextSelectionEnabled="True"
                                         MaxLines="2"
                                         VerticalAlignment="Top"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         Style="{StaticResource CaptionTextBlockStyle}"
-                                        Text="{x:Bind Description}"
+                                        Text="{x:Bind DisplayDescription}"
                                         TextTrimming="CharacterEllipsis"
                                         TextWrapping="Wrap"
-                                        ToolTipService.ToolTip="{x:Bind Description}" />
+                                        ToolTipService.ToolTip="{x:Bind DisplayDescription}" />
 
                                     <Grid Grid.Row="2" ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
@@ -396,6 +458,18 @@
                                             <FontIcon FontSize="14" Glyph="&#xE712;" />
                                             <Button.Flyout>
                                                 <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                    <!-- Group 1: Installation -->
+                                                    <MenuFlyoutItem
+                                                        Click="OnInstallMissingEditorClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Install missing Editor..."
+                                                        Visibility="{x:Bind IsEditorMissing}">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE896;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutSeparator Visibility="{x:Bind IsEditorMissing}" />
+                                                    <!-- Group 2: Organization & Configuration -->
                                                     <MenuFlyoutItem
                                                         Click="OnEditTemplateClick"
                                                         Tag="{x:Bind}"
@@ -405,6 +479,16 @@
                                                         </MenuFlyoutItem.Icon>
                                                     </MenuFlyoutItem>
                                                     <MenuFlyoutItem
+                                                        Click="OnManageTemplateTagsClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Manage tags...">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE8EC;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutSeparator />
+                                                    <!-- Group 3: Navigation -->
+                                                    <MenuFlyoutItem
                                                         Click="OnShowInExplorerClick"
                                                         Tag="{x:Bind}"
                                                         Text="Show in File Explorer">
@@ -413,12 +497,13 @@
                                                         </MenuFlyoutItem.Icon>
                                                     </MenuFlyoutItem>
                                                     <MenuFlyoutSeparator />
+                                                    <!-- Group 4: Destructive -->
                                                     <MenuFlyoutItem
                                                         Click="OnDeleteTemplateClick"
                                                         Tag="{x:Bind}"
                                                         Text="Delete">
                                                         <MenuFlyoutItem.Icon>
-                                                            <FontIcon Glyph="&#xE74D;" />
+                                                            <FontIcon Foreground="{ThemeResource SystemFillColorCriticalBrush}" Glyph="&#xE74D;" />
                                                         </MenuFlyoutItem.Icon>
                                                     </MenuFlyoutItem>
                                                 </MenuFlyout>

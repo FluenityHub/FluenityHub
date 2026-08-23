@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Numerics;
 using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
@@ -6,10 +7,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics.Imaging;
+using Windows.UI.ViewManagement;
 
 namespace FluenityHub_WinUIHost.Dialogs;
 
@@ -35,27 +38,49 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
     public ObservableCollection<TagChipItem> AvailableTags { get; } = [];
     public ObservableCollection<TagChipItem> SelectedTags { get; } = [];
 
+    public IReadOnlyList<string> ResultTags => SelectedTags.Select(t => t.Name).ToList();
+
     private ObservableCollection<TagChipItem>? _dragSource;
     private TagChipItem? _draggedTag;
     private FrameworkElement? _draggedElement;
     private SoftwareBitmap? _dragPreviewBitmap;
+    private readonly UISettings _uiSettings = new();
+    private readonly HashSet<TagChipItem> _pendingAvailableTagAnimations = [];
+    private readonly HashSet<TagChipItem> _pendingActiveTagAnimations = [];
+    private bool _availableTagAnimationQueued;
+    private bool _activeTagAnimationQueued;
+    private TransitionCollection? _availableTagRepositionTransitions;
+    private TransitionCollection? _activeTagRepositionTransitions;
+    private bool _availableTagRepositionSuspended;
+    private bool _activeTagRepositionSuspended;
 
     public ManageProjectTagsDialog(
         UnityProjectInfo project,
         IEnumerable<string>? existingGlobalTags = null,
         IEnumerable<string>? preferredCategoryOrder = null)
+        : this(project.Title, project.Tags, "Project", existingGlobalTags, preferredCategoryOrder)
+    {
+    }
+
+    public ManageProjectTagsDialog(
+        string title,
+        IEnumerable<string> currentTags,
+        string itemType = "Project",
+        IEnumerable<string>? existingGlobalTags = null,
+        IEnumerable<string>? preferredCategoryOrder = null)
     {
         InitializeComponent();
 
-        SubtitleTextBlock.Text = $"Manage tags for {project.Title}";
+        Title = $"Manage {itemType} Tags";
+        SubtitleTextBlock.Text = $"Select or create custom tags for {title}.";
 
-        // Seed available categories with default Unity presets + any existing tags from app/projects
-        var seedTags = new List<string> { "Game", "Client Project", "Prototype", "Personal", "Simulation", "Archived", "Visualization", "Work in Progress", "2D", "3D" };
+        // Seed available categories with default presets + any existing tags from app/projects/templates
+        var seedTags = new List<string> { "2D", "3D", "URP", "HDRP", "Mobile", "VR", "AR", "Core", "Multiplayer", "ShaderGraph", "Prototype", "Simulation", "Game", "Client Project", "Work in Progress" };
         if (existingGlobalTags is not null)
         {
             seedTags.AddRange(existingGlobalTags);
         }
-        seedTags.AddRange(project.Tags);
+        seedTags.AddRange(currentTags);
 
         var distinctSeedTags = seedTags
             .Where(tag => !string.IsNullOrWhiteSpace(tag))
@@ -72,11 +97,11 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
             AvailableTags.Add(new TagChipItem(tag));
         }
 
-        foreach (var tag in project.Tags)
+        foreach (var tag in currentTags)
         {
-            if (!SelectedTagsAny(tag))
+            if (!string.IsNullOrWhiteSpace(tag) && !SelectedTagsAny(tag.Trim()))
             {
-                SelectedTags.Add(new TagChipItem(tag));
+                SelectedTags.Add(new TagChipItem(tag.Trim()));
             }
         }
 
@@ -95,7 +120,6 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         removeItem.Click += OnRemoveCustomColorClick;
         customFlyout.Items.Add(removeItem);
         CustomColorPreviewBtn.ContextFlyout = customFlyout;
-
     }
 
     private readonly record struct TagDropPlacement(int Index, double X, double Y, double Height);
@@ -204,7 +228,10 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         args.DragUIOverride.IsGlyphVisible = false;
 
         var placement = GetTagDropPlacement(itemsControl, args.GetPosition(itemsControl));
-        Canvas.SetLeft(indicator, Math.Max(0, placement.X - (indicator.Width / 2)));
+        var rasterizationScale = itemsControl.XamlRoot?.RasterizationScale ?? 1d;
+        indicator.Width = 1d / rasterizationScale;
+        var pixelAlignedX = Math.Round(placement.X * rasterizationScale) / rasterizationScale;
+        Canvas.SetLeft(indicator, Math.Max(0, pixelAlignedX));
         Canvas.SetTop(indicator, placement.Y);
         indicator.Height = placement.Height;
         indicator.Visibility = Visibility.Visible;
@@ -220,12 +247,13 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
     {
         try
         {
-            if (!ReferenceEquals(_dragSource, target) || _draggedTag is null)
+            var draggedTag = _draggedTag;
+            if (!ReferenceEquals(_dragSource, target) || draggedTag is null)
             {
                 return;
             }
 
-            var oldIndex = target.IndexOf(_draggedTag);
+            var oldIndex = target.IndexOf(draggedTag);
             if (oldIndex < 0)
             {
                 return;
@@ -243,6 +271,7 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
             {
                 target.Move(oldIndex, newIndex);
                 UpdateUIState();
+                QueueTagEntranceAnimation(itemsControl, target, draggedTag);
             }
 
             args.AcceptedOperation = DataPackageOperation.Move;
@@ -252,6 +281,231 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         {
             ResetTagDragState();
         }
+    }
+
+    private void QueueTagEntranceAnimation(
+        ItemsControl itemsControl,
+        ObservableCollection<TagChipItem> items,
+        TagChipItem item)
+    {
+        if (!_uiSettings.AnimationsEnabled)
+        {
+            return;
+        }
+
+        var isActiveCollection = ReferenceEquals(items, SelectedTags);
+        var pendingItems = isActiveCollection
+            ? _pendingActiveTagAnimations
+            : _pendingAvailableTagAnimations;
+        pendingItems.Add(item);
+
+        if (isActiveCollection ? _activeTagAnimationQueued : _availableTagAnimationQueued)
+        {
+            return;
+        }
+
+        if (isActiveCollection)
+        {
+            _activeTagAnimationQueued = true;
+        }
+        else
+        {
+            _availableTagAnimationQueued = true;
+        }
+
+        if (!DispatcherQueue.TryEnqueue(
+            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => PlayPendingTagAnimations(itemsControl, items, isActiveCollection)))
+        {
+            pendingItems.Remove(item);
+            RestoreTagRepositionTransitions(itemsControl, isActiveCollection);
+            if (isActiveCollection)
+            {
+                _activeTagAnimationQueued = false;
+            }
+            else
+            {
+                _availableTagAnimationQueued = false;
+            }
+        }
+    }
+
+    private void PlayPendingTagAnimations(
+        ItemsControl itemsControl,
+        ObservableCollection<TagChipItem> items,
+        bool isActiveCollection)
+    {
+        var pendingItems = isActiveCollection
+            ? _pendingActiveTagAnimations
+            : _pendingAvailableTagAnimations;
+        var animationBatch = pendingItems.ToArray();
+        pendingItems.Clear();
+
+        if (isActiveCollection)
+        {
+            _activeTagAnimationQueued = false;
+        }
+        else
+        {
+            _availableTagAnimationQueued = false;
+        }
+
+        itemsControl.UpdateLayout();
+        try
+        {
+            foreach (var item in animationBatch)
+            {
+                var index = items.IndexOf(item);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                if (itemsControl.ContainerFromIndex(index) is not FrameworkElement container)
+                {
+                    continue;
+                }
+
+                var animationTarget = FindTagAnimationTarget(container, item) ?? container;
+                if (animationTarget.XamlRoot is null
+                    || animationTarget.ActualWidth <= 0
+                    || animationTarget.ActualHeight <= 0)
+                {
+                    continue;
+                }
+
+                PrimeTagEntranceContainer(animationTarget);
+                animationTarget.CenterPoint = new Vector3(
+                    (float)(animationTarget.ActualWidth / 2),
+                    (float)(animationTarget.ActualHeight / 2),
+                    0);
+
+                var compositor = Microsoft.UI.Xaml.Media.CompositionTarget.GetCompositorForCurrentThread();
+                var easing = compositor.CreateCubicBezierEasingFunction(
+                    new Vector2(0, 0),
+                    new Vector2(0, 1));
+                var animation = compositor.CreateVector3KeyFrameAnimation();
+                animation.Target = nameof(animationTarget.Scale);
+                animation.Duration = TimeSpan.FromMilliseconds(250);
+                animation.InsertKeyFrame(0, new Vector3(0.82f, 0.82f, 1));
+                animation.InsertKeyFrame(1, Vector3.One, easing);
+
+                var opacityAnimation = compositor.CreateScalarKeyFrameAnimation();
+                opacityAnimation.Target = nameof(animationTarget.Opacity);
+                opacityAnimation.Duration = animation.Duration;
+                opacityAnimation.InsertKeyFrame(0, 0);
+                opacityAnimation.InsertKeyFrame(1, 1, compositor.CreateLinearEasingFunction());
+
+                // Keep the dependency-property values at the final state. The compositor
+                // animations temporarily override them for the single entrance sequence.
+                animationTarget.Scale = Vector3.One;
+                animationTarget.Opacity = 1;
+                animationTarget.StartAnimation(animation);
+                animationTarget.StartAnimation(opacityAnimation);
+            }
+        }
+        finally
+        {
+            RestoreTagRepositionTransitions(itemsControl, isActiveCollection);
+        }
+    }
+
+    private static void PrimeTagEntranceContainer(FrameworkElement container)
+    {
+        container.Scale = new Vector3(0.82f, 0.82f, 1);
+        container.Opacity = 0;
+    }
+
+    private static FrameworkElement? FindTagAnimationTarget(DependencyObject root, TagChipItem item)
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is FrameworkElement { CanDrag: true } element
+                && ReferenceEquals(element.DataContext, item))
+            {
+                return element;
+            }
+
+            if (FindTagAnimationTarget(child, item) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
+
+    private void PrimePendingTagEntrance(FrameworkElement element, bool isActiveCollection)
+    {
+        if (!_uiSettings.AnimationsEnabled || element.DataContext is not TagChipItem item)
+        {
+            return;
+        }
+
+        var pendingItems = isActiveCollection
+            ? _pendingActiveTagAnimations
+            : _pendingAvailableTagAnimations;
+        if (pendingItems.Contains(item))
+        {
+            PrimeTagEntranceContainer(element);
+        }
+    }
+
+    private void SuspendTagRepositionTransitions(ItemsControl itemsControl, bool isActiveCollection)
+    {
+        if (!_uiSettings.AnimationsEnabled)
+        {
+            return;
+        }
+
+        if (isActiveCollection)
+        {
+            if (_activeTagRepositionSuspended)
+            {
+                return;
+            }
+
+            _activeTagRepositionTransitions = itemsControl.ItemContainerTransitions;
+            itemsControl.ItemContainerTransitions = null;
+            _activeTagRepositionSuspended = true;
+            return;
+        }
+
+        if (_availableTagRepositionSuspended)
+        {
+            return;
+        }
+
+        _availableTagRepositionTransitions = itemsControl.ItemContainerTransitions;
+        itemsControl.ItemContainerTransitions = null;
+        _availableTagRepositionSuspended = true;
+    }
+
+    private void RestoreTagRepositionTransitions(ItemsControl itemsControl, bool isActiveCollection)
+    {
+        if (isActiveCollection)
+        {
+            if (!_activeTagRepositionSuspended)
+            {
+                return;
+            }
+
+            itemsControl.ItemContainerTransitions = _activeTagRepositionTransitions;
+            _activeTagRepositionTransitions = null;
+            _activeTagRepositionSuspended = false;
+            return;
+        }
+
+        if (!_availableTagRepositionSuspended)
+        {
+            return;
+        }
+
+        itemsControl.ItemContainerTransitions = _availableTagRepositionTransitions;
+        _availableTagRepositionTransitions = null;
+        _availableTagRepositionSuspended = false;
     }
 
     private static TagDropPlacement GetTagDropPlacement(ItemsControl itemsControl, Point pointer)
@@ -272,7 +526,15 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
             if (pointer.Y < origin.Y
                 || (pointer.Y <= bottom && pointer.X < horizontalMidpoint))
             {
-                return new TagDropPlacement(index, origin.X, origin.Y, container.ActualHeight);
+                var insertionX = origin.X;
+                if (lastContainer is not null
+                    && Math.Abs(lastOrigin.Y - origin.Y) < 0.5)
+                {
+                    var previousRight = lastOrigin.X + lastContainer.ActualWidth;
+                    insertionX = previousRight + ((origin.X - previousRight) / 2);
+                }
+
+                return new TagDropPlacement(index, insertionX, origin.Y, container.ActualHeight);
             }
 
             lastContainer = container;
@@ -496,7 +758,10 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
             var existingAvailable = AvailableTags.FirstOrDefault(t => t.Name.Equals(text, StringComparison.OrdinalIgnoreCase));
             if (existingAvailable is null)
             {
-                AvailableTags.Add(new TagChipItem(text));
+                var availableTag = new TagChipItem(text);
+                SuspendTagRepositionTransitions(AvailableTagsItemsControl, isActiveCollection: false);
+                QueueTagEntranceAnimation(AvailableTagsItemsControl, AvailableTags, availableTag);
+                AvailableTags.Add(availableTag);
             }
 
             // 2. Select tag for current project
@@ -510,7 +775,10 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
         var normalizedTag = UnityHubProjectService.NormalizeProjectTags([tag]).FirstOrDefault();
         if (!string.IsNullOrEmpty(normalizedTag) && !SelectedTagsAny(normalizedTag))
         {
-            SelectedTags.Add(new TagChipItem(normalizedTag));
+            var selectedTag = new TagChipItem(normalizedTag);
+            SuspendTagRepositionTransitions(ActiveTagsItemsControl, isActiveCollection: true);
+            QueueTagEntranceAnimation(ActiveTagsItemsControl, SelectedTags, selectedTag);
+            SelectedTags.Add(selectedTag);
             UpdateUIState();
         }
     }
@@ -726,6 +994,7 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
     {
         if (sender is ToggleButton toggleBtn && toggleBtn.Tag is string tag)
         {
+            PrimePendingTagEntrance(toggleBtn, isActiveCollection: false);
             toggleBtn.IsChecked = SelectedTagsAny(tag);
             UpdateChipIconTheme(toggleBtn);
 
@@ -768,6 +1037,7 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
     {
         if (sender is FrameworkElement element && element.Tag is string tag)
         {
+            PrimePendingTagEntrance(element, isActiveCollection: true);
             var flyout = new MenuFlyout();
 
             var removeItem = new MenuFlyoutItem

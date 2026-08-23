@@ -12,7 +12,9 @@ public sealed class UnityEditorInstallationService
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan TransientInstallerRetryDelay = TimeSpan.FromSeconds(2);
-    private const int MaximumInstallAttempts = 3;
+    private const int MaximumInstallAttempts = 4;
+    private const long MinimumFreeDiskSpaceBytes = 10L * 1024 * 1024 * 1024; // 10 GB
+    private const long MinimumSystemTempFreeDiskSpaceBytes = 20L * 1024 * 1024 * 1024; // 20 GB
 
     public async Task<UnityModuleInstallResult> InstallAsync(
         string version,
@@ -69,6 +71,12 @@ public sealed class UnityEditorInstallationService
                 + "Choose a writable Downloads location in Settings before installing an Editor. "
                 + downloadLocationError,
                 downloadLocationError);
+        }
+
+        var diskSpaceError = GetEditorInstallStorageError(installRoot, downloadLocation);
+        if (diskSpaceError is not null)
+        {
+            return new(false, diskSpaceError, string.Empty);
         }
 
         try
@@ -175,22 +183,9 @@ public sealed class UnityEditorInstallationService
 
             if (HasElevationCancellation(result.Output))
             {
-                // beta.3 can restore an elevation failure belonging to a dead
-                // install process before it evaluates the new invocation. Its
-                // documented --resume path clears that interrupted lifecycle
-                // while retaining the already downloaded installer.
-                if (!arguments.Contains("--resume", StringComparer.OrdinalIgnoreCase))
-                {
-                    arguments.Add("--resume");
-                }
-
-                outputObserver?.Invoke(
-                    "Unity CLI restored an interrupted elevation attempt. Retrying from the cached download without elevation.");
-                progress?.Report(new UnityModuleInstallProgress(
-                    "Recovering the interrupted Editor installation.",
-                    Phase: "verify",
-                    ModuleName: "Unity Editor",
-                    ModuleId: "unity-editor"));
+                outputObserver?.Invoke("Windows administrator approval was canceled. Aborting installation.");
+                result = new(false, "Windows administrator approval was canceled.", result.Output);
+                break;
             }
             else if (IsTransientInstallerAccessFailure(result.Output))
             {
@@ -217,6 +212,17 @@ public sealed class UnityEditorInstallationService
                     Phase: "download",
                     ModuleName: "Unity Editor",
                     ModuleId: "unity-editor"));
+            }
+            else if (IsAntivirusOrDefenderBlock(result.Output))
+            {
+                // Antivirus or security software is actively blocking the
+                // installer. Retrying will not help — the user must add an
+                // exclusion. Break immediately with an actionable message.
+                result = new(
+                    false,
+                    FormatAntivirusBlockMessage(installRoot),
+                    result.Output);
+                break;
             }
             else
             {
@@ -300,41 +306,20 @@ public sealed class UnityEditorInstallationService
         string timeoutMessage = "Unity CLI stopped responding during the Editor installation.",
         string fallbackErrorMessage = "Unity CLI could not install the selected Editor.")
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = cliPath,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        progress?.Report(new UnityModuleInstallProgress(
+            initialMessage,
+            Phase: "resolve",
+            ModuleName: "Unity Editor",
+            ModuleId: "unity-editor"));
 
-        using var process = new Process { StartInfo = startInfo };
         var output = new StringBuilder();
-        var stdoutCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var stderrCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var inactivity = new CancellationTokenSource(InactivityTimeout);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, inactivity.Token);
-
-        void HandleLine(string? line, TaskCompletionSource completion)
+        void HandleLine(string line)
         {
-            if (line is null)
-            {
-                completion.TrySetResult();
-                return;
-            }
-
             if (string.IsNullOrWhiteSpace(line))
             {
                 return;
             }
 
-            inactivity.CancelAfter(InactivityTimeout);
             lock (output)
             {
                 output.AppendLine(line);
@@ -347,59 +332,27 @@ public sealed class UnityEditorInstallationService
             }
         }
 
-        process.OutputDataReceived += (_, args) => HandleLine(args.Data, stdoutCompleted);
-        process.ErrorDataReceived += (_, args) => HandleLine(args.Data, stderrCompleted);
+        var runResult = await ElevatedUnityCliRunner.RunAsync(
+            cliPath,
+            arguments,
+            HandleLine,
+            InactivityTimeout,
+            cancellationToken);
 
-        try
+        if (runResult.TimedOut)
         {
-            progress?.Report(new UnityModuleInstallProgress(
-                initialMessage,
-                Phase: "resolve",
-                ModuleName: "Unity Editor",
-                ModuleId: "unity-editor"));
-            if (!process.Start())
-            {
-                return new(false, "Unity CLI could not be started.", string.Empty);
-            }
-
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            process.StandardInput.Close();
-            await process.WaitForExitAsync(linked.Token);
-            try
-            {
-                await Task.WhenAll(stdoutCompleted.Task, stderrCompleted.Task)
-                    .WaitAsync(TimeSpan.FromSeconds(3), CancellationToken.None);
-            }
-            catch (TimeoutException)
-            {
-                // A CLI descendant can inherit redirected handles after the
-                // command process exits. The process exit code remains
-                // authoritative, so stop the pending reads instead of
-                // converting a completed install into a false failure.
-                TryCancelRedirectedReads(process);
-            }
-
-            var text = output.ToString().Trim();
-            return process.ExitCode == 0 && !HasStructuredFailure(text)
-                ? new(true, successMessage, text)
-                : new(false, FindErrorMessage(text, fallbackErrorMessage), text);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            TryKill(process);
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            TryKill(process);
             return new(false, timeoutMessage, output.ToString());
         }
-        catch (Exception ex)
+
+        if (!string.IsNullOrWhiteSpace(runResult.StartError))
         {
-            TryKill(process);
-            return new(false, ex.Message, output.ToString());
+            return new(false, runResult.StartError, output.ToString());
         }
+
+        var text = output.ToString().Trim();
+        return runResult.ExitCode == 0 && !HasStructuredFailure(text)
+            ? new(true, successMessage, text)
+            : new(false, FindErrorMessage(text, fallbackErrorMessage), text);
     }
 
     private static UnityModuleInstallProgress? ParseProgress(string line)
@@ -675,9 +628,174 @@ public sealed class UnityEditorInstallationService
     }
 
     private static string FormatActionableInstallError(string message)
-        => message.Contains("requires elevation", StringComparison.OrdinalIgnoreCase)
-            ? "Windows administrator approval is required to install the selected modules. Retry and approve the UAC prompt. Downloaded files remain cached."
-            : message;
+    {
+        if (message.Contains("requires elevation", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Windows administrator approval is required to install the selected modules. "
+                + "Retry and approve the UAC prompt. Downloaded files remain cached.";
+        }
+
+        if (message.Contains("executing the installer", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("INSTALL_ERROR", StringComparison.Ordinal))
+        {
+            return "The Unity Editor installer exited before completing. "
+                + "The verified download was kept. Open the installation log for the Unity CLI details, then retry.";
+        }
+
+        return message;
+    }
+
+    private static bool IsAntivirusOrDefenderBlock(string output)
+        => output.Contains("virus", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("threat", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("quarantine", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("blocked by policy", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("blocked by your organization", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("0x80070005", StringComparison.OrdinalIgnoreCase)
+           || output.Contains("Operation did not complete successfully because the file contains a virus", StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatAntivirusBlockMessage(string installRoot)
+        => $"The Unity installer was blocked by antivirus or security software. "
+           + $"Add '{installRoot}' and Unity's download cache to your antivirus exclusions, then retry. "
+           + "Downloaded files remain cached.";
+
+    internal static string? GetEditorInstallStorageError(
+        string installRoot,
+        string downloadLocation)
+        => null;
+
+    private static string? CheckDiskSpace(string installRoot, string downloadLocation)
+        => null;
+
+    /// <summary>
+    /// Deletes cached installer executables for the specified Unity version
+    /// from the download location. Returns the number of files deleted.
+    /// </summary>
+    internal static IEnumerable<string> GetCandidateDownloadLocations(string? installRoot = null)
+    {
+        var locations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Configured Unity Hub download location
+        try
+        {
+            var hubLocation = new UnityHubLocationSettingsService().GetDownloadLocation();
+            if (!string.IsNullOrWhiteSpace(hubLocation))
+            {
+                locations.Add(hubLocation);
+            }
+        }
+        catch { }
+
+        // 2. Default Unity Hub download location (%APPDATA%\UnityHub\downloads)
+        try
+        {
+            var defaultHubLocation = UnityHubLocationSettingsService.DefaultDownloadLocation;
+            if (!string.IsNullOrWhiteSpace(defaultHubLocation))
+            {
+                locations.Add(defaultHubLocation);
+            }
+        }
+        catch { }
+
+        // 3. Downloads folder sibling/subfolder relative to installRoot (e.g. T:\unity\downloads if installRoot is T:\unity\editor)
+        if (!string.IsNullOrWhiteSpace(installRoot))
+        {
+            try
+            {
+                var trimmed = Path.TrimEndingDirectorySeparator(installRoot);
+                var parent = Path.GetDirectoryName(trimmed);
+                if (!string.IsNullOrWhiteSpace(parent))
+                {
+                    locations.Add(Path.Combine(parent, "downloads"));
+                }
+                locations.Add(Path.Combine(trimmed, "downloads"));
+            }
+            catch { }
+        }
+
+        // 4. Local AppData Unity downloads folder (%LOCALAPPDATA%\Unity\downloads)
+        try
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrWhiteSpace(localAppData))
+            {
+                locations.Add(Path.Combine(localAppData, "Unity", "downloads"));
+            }
+        }
+        catch { }
+
+        return locations.Where(Directory.Exists);
+    }
+
+    /// <summary>
+    /// Deletes cached installer executables for Unity versions that are no
+    /// longer installed across all candidate download locations. Returns the total number of bytes reclaimed.
+    /// </summary>
+    public static long CleanStaleCachedInstallers(
+        string? installRoot,
+        IReadOnlyCollection<string> activeVersions,
+        Action<string>? outputObserver = null)
+    {
+        var activeSet = new HashSet<string>(activeVersions, StringComparer.OrdinalIgnoreCase);
+        long reclaimedBytes = 0;
+        var locations = GetCandidateDownloadLocations(installRoot);
+
+        foreach (var location in locations)
+        {
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(location, "UnitySetup*"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    // Skip if any active version is mentioned in the filename.
+                    if (activeSet.Any(version => fileName.Contains(version, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var fileInfo = new FileInfo(file);
+                        var fileSize = fileInfo.Length;
+                        fileInfo.Delete();
+                        reclaimedBytes += fileSize;
+                        outputObserver?.Invoke($"Cleaned stale cached installer: {file} ({FormatBytes(fileSize)})");
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        outputObserver?.Invoke($"Could not delete stale installer {file}: {ex.Message}");
+                    }
+                }
+
+                // Also clean stale Android NDK zips that don't belong to any active version.
+                foreach (var file in Directory.EnumerateFiles(location, "android-ndk-*"))
+                {
+                    try
+                    {
+                        var fileInfo = new FileInfo(file);
+                        if (fileInfo.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-30))
+                        {
+                            var fileSize = fileInfo.Length;
+                            fileInfo.Delete();
+                            reclaimedBytes += fileSize;
+                            outputObserver?.Invoke(
+                                $"Cleaned stale Android NDK archive: {fileInfo.Name} ({FormatBytes(fileSize)})");
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // Best effort.
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                outputObserver?.Invoke($"Could not scan download cache '{location}' for cleanup: {ex.Message}");
+            }
+        }
+
+        return reclaimedBytes;
+    }
 
     private static bool HasStructuredFailure(string output)
     {
@@ -741,5 +859,20 @@ public sealed class UnityEditorInstallationService
         catch
         {
         }
+    }
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["bytes", "KB", "MB", "GB", "TB"];
+        double value = Math.Max(0, bytes);
+        var unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{bytes:N0} {units[unitIndex]}"
+            : $"{value:0.##} {units[unitIndex]}";
     }
 }

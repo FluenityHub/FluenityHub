@@ -521,7 +521,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // The optional metadata update must not interrupt project loading.
+            // Ignore write errors
         }
     }
 
@@ -553,7 +553,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // Keep the existing project list when the mirror cannot be written.
+            // Ignore write errors
         }
     }
 
@@ -790,7 +790,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // Leave the existing entry in place if this repair cannot be applied.
+            // Silently fail — the project just stays in the list
         }
     }
 
@@ -869,7 +869,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // A stale entry is harmless; the next scan can repair it.
+            // Silently fail
         }
     }
 
@@ -899,7 +899,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // This cleanup is optional and should not block the project refresh.
+            // Non-critical
         }
     }
 
@@ -1090,7 +1090,7 @@ public sealed class UnityHubProjectService
         }
         catch
         {
-            // Repair is best effort; the original project data remains usable.
+            // Ignore repair failures
         }
     }
 

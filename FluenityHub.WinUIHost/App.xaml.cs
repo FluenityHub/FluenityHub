@@ -30,6 +30,8 @@ public partial class App : Application
 
     public App()
     {
+        Services.JumpListService.InitializeAppUserModelId();
+
         var arguments = Environment.GetCommandLineArgs();
         var helperArgumentIndex = Array.FindIndex(
             arguments,
@@ -131,6 +133,9 @@ public partial class App : Application
         {
             // Ignore settings load fallback on initial launch
         }
+
+        // Initialize Windows Taskbar / Start Menu Jump List with tasks & recent projects
+        _ = Services.JumpListService.RefreshAsync();
     }
 
     private async Task RunElevatedUnityCliHelperAsync()
@@ -197,20 +202,47 @@ public partial class App : Application
     private static void HandleExternalArguments(IReadOnlyList<string> arguments)
     {
         string? projectPath = null;
+        string? action = null;
+
         for (var index = 0; index < arguments.Count; index++)
         {
-            if (string.Equals(arguments[index], "--project", StringComparison.OrdinalIgnoreCase) &&
+            var argument = arguments[index];
+
+            if ((string.Equals(argument, "--project", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(argument, "--projectPath", StringComparison.OrdinalIgnoreCase)) &&
                 index + 1 < arguments.Count)
             {
                 projectPath = arguments[index + 1];
-                break;
+                index++;
+            }
+            else if ((string.Equals(argument, "--action", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(argument, "--openPage", StringComparison.OrdinalIgnoreCase)) &&
+                     index + 1 < arguments.Count)
+            {
+                action = arguments[index + 1];
+                index++;
+            }
+            else if (string.Equals(argument, "--new-project", StringComparison.OrdinalIgnoreCase))
+            {
+                action = "new-project";
+            }
+            else if (string.Equals(argument, "--install-editor", StringComparison.OrdinalIgnoreCase))
+            {
+                action = "install-editor";
+            }
+            else if (Directory.Exists(argument))
+            {
+                projectPath ??= argument;
             }
         }
 
-        projectPath ??= arguments.FirstOrDefault(Directory.Exists);
         if (!string.IsNullOrWhiteSpace(projectPath))
         {
             MainWindow.Instance?.OpenExternalProjectPath(projectPath);
+        }
+        else if (!string.IsNullOrWhiteSpace(action))
+        {
+            MainWindow.Instance?.HandleExternalAction(action);
         }
     }
 }

@@ -35,6 +35,11 @@ public sealed class UnityCloudService
             return new(false, [], "The Unity organization ID has an invalid format.");
         }
 
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return new(false, [], NetworkConnectivityService.OfflineMessage);
+        }
+
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
             $"assets/v1/organizations/{Uri.EscapeDataString(organizationId)}/projects?Page=1&Limit=100");
@@ -78,11 +83,14 @@ public sealed class UnityCloudService
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new(false, [], "Unity Cloud did not respond in time.");
+            return new(false, [],
+                "Unity Cloud did not respond in time. Check your connection and try again.");
         }
         catch (HttpRequestException ex)
         {
-            return new(false, [], $"Unity Cloud could not be reached. {ex.Message}");
+            return new(false, [], NetworkConnectivityService.Current.GetUserMessage(
+                ex,
+                "Unity Cloud"));
         }
         catch (JsonException)
         {

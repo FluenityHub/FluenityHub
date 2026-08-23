@@ -19,6 +19,7 @@ public sealed partial class TemplatesPage : Page
     private readonly UnityHubProjectService _projectService = new();
     private readonly UnityEditorLocator _editorLocator = new();
     private readonly AppSettingsStore _settingsStore = new();
+    private readonly UnityEditorReleaseService _releaseService = new();
 
     private List<CustomTemplateInfo> _allTemplates = [];
     private List<UnityProjectInfo> _allProjects = [];
@@ -26,9 +27,8 @@ public sealed partial class TemplatesPage : Page
     private AppSettings _settings = new();
     private string _sortCriteria = "CreatedAt";
     private bool _sortAscending;
-    private List<TemplateEditorFilterOption> _editorFilterOptions = [];
     private HashSet<string> _selectedEditorFilters = new(StringComparer.OrdinalIgnoreCase);
-    private ToggleMenuFlyoutItem? _allEditorVersionsMenuItem;
+    private readonly HashSet<string> _selectedTagFilters = new(StringComparer.OrdinalIgnoreCase);
 
     public TemplatesPage()
     {
@@ -61,6 +61,15 @@ public sealed partial class TemplatesPage : Page
             _selectedEditorFilters = new HashSet<string>(
                 _settings.TemplateEditorFilters ?? [],
                 StringComparer.OrdinalIgnoreCase);
+            _selectedTagFilters.Clear();
+            foreach (var tag in _settings.TemplateTagFilters ?? [])
+            {
+                _selectedTagFilters.Add(tag);
+            }
+            if (HideMissingEditorsItem is not null)
+            {
+                HideMissingEditorsItem.IsChecked = _settings.TemplateHideMissingEditors;
+            }
             SyncSortFlyout();
 
             var customEditorPaths = _settings.CustomEditorPaths ?? [];
@@ -75,7 +84,7 @@ public sealed partial class TemplatesPage : Page
             _allTemplates = data.templates;
             _allProjects = data.projects;
             _installedEditors = data.editors;
-            PopulateEditorFilterOptions();
+            RebuildFilterMenus();
             FilterAndDisplayTemplates();
         }
         catch (Exception ex)
@@ -115,13 +124,26 @@ public sealed partial class TemplatesPage : Page
                 template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 template.EditorVersion.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                template.Version.Contains(query, StringComparison.OrdinalIgnoreCase));
+                template.Version.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (template.Tags != null && template.Tags.Any(tag => tag.Contains(query, StringComparison.OrdinalIgnoreCase))));
+
+        if (HideMissingEditorsItem?.IsChecked == true)
+        {
+            filtered = filtered.Where(template => template.IsEditorInstalled);
+        }
 
         if (_selectedEditorFilters.Count > 0)
         {
             filtered = filtered.Where(template =>
                 _selectedEditorFilters.Any(version =>
                     IsTemplateForEditorVersion(template, version)));
+        }
+
+        if (_selectedTagFilters.Count > 0)
+        {
+            filtered = filtered.Where(template =>
+                template.Tags != null &&
+                template.Tags.Any(tag => _selectedTagFilters.Contains(tag)));
         }
 
         filtered = _sortCriteria switch
@@ -193,8 +215,27 @@ public sealed partial class TemplatesPage : Page
         }
     }
 
-    private void PopulateEditorFilterOptions()
+    private void RebuildFilterMenus()
     {
+        RebuildEditorVersionFilterMenu();
+        RebuildTagFilterMenu();
+        UpdateFilterLabels();
+    }
+
+    private void RebuildEditorVersionFilterMenu()
+    {
+        if (EditorFilterSubItem is null) return;
+        EditorFilterSubItem.Items.Clear();
+
+        var clearItem = new MenuFlyoutItem
+        {
+            Text = "Clear filter",
+            IsEnabled = _selectedEditorFilters.Count > 0
+        };
+        clearItem.Click += OnClearEditorFiltersClick;
+        EditorFilterSubItem.Items.Add(clearItem);
+        EditorFilterSubItem.Items.Add(new MenuFlyoutSeparator());
+
         var versions = _allTemplates
             .Select(template => template.EditorVersion?.Trim())
             .Where(version => !string.IsNullOrWhiteSpace(version))
@@ -203,100 +244,183 @@ public sealed partial class TemplatesPage : Page
             .OrderByDescending(version => version, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        _selectedEditorFilters.IntersectWith(versions);
-        _editorFilterOptions = versions.Select(version => new TemplateEditorFilterOption
+        if (versions.Count == 0)
         {
-            Version = version,
-            DisplayName = FormatEditorVersion(version),
-            IsInstalled = _installedEditors.Keys.Any(installedVersion =>
-                EditorVersionsMatch(version, installedVersion)),
-            IsSelected = _selectedEditorFilters.Contains(version)
-        }).ToList();
-
-        EditorVersionFilterFlyout.Items.Clear();
-        if (_editorFilterOptions.Count == 0)
-        {
-            EditorVersionFilterFlyout.Items.Add(new MenuFlyoutItem
+            EditorFilterSubItem.Items.Add(new MenuFlyoutItem
             {
-                Text = "No template Editor versions found",
+                Text = "No Editor versions available",
                 IsEnabled = false
             });
         }
         else
         {
-            _allEditorVersionsMenuItem = new ToggleMenuFlyoutItem
+            foreach (var version in versions)
             {
-                Text = "All Editor versions",
-                IsChecked = _selectedEditorFilters.Count == 0
-            };
-            _allEditorVersionsMenuItem.Click += OnAllEditorVersionsFilterClick;
-            EditorVersionFilterFlyout.Items.Add(_allEditorVersionsMenuItem);
-            EditorVersionFilterFlyout.Items.Add(new MenuFlyoutSeparator());
+                bool isInstalled = _installedEditors.Keys.Any(installedVersion =>
+                    EditorVersionsMatch(version, installedVersion));
 
-            foreach (var option in _editorFilterOptions)
-            {
                 var item = new ToggleMenuFlyoutItem
                 {
-                    Text = option.IsMissing
-                        ? $"{option.DisplayName} (Missing)"
-                        : option.DisplayName,
-                    IsChecked = option.IsSelected,
-                    Tag = option
+                    Text = !isInstalled ? $"{FormatEditorVersion(version)} (Missing)" : FormatEditorVersion(version),
+                    Tag = version,
+                    IsChecked = _selectedEditorFilters.Contains(version)
                 };
-                if (option.IsMissing)
+                if (!isInstalled && Resources.ContainsKey("MissingEditorVersionMenuItemStyle"))
                 {
                     item.Style = (Style)Resources["MissingEditorVersionMenuItemStyle"];
                 }
                 item.Click += OnEditorVersionFilterClick;
-                EditorVersionFilterFlyout.Items.Add(item);
+                EditorFilterSubItem.Items.Add(item);
+            }
+        }
+    }
+
+    private void RebuildTagFilterMenu()
+    {
+        if (TagFilterSubItem is null) return;
+        TagFilterSubItem.Items.Clear();
+
+        var clearItem = new MenuFlyoutItem
+        {
+            Text = "Clear filter",
+            IsEnabled = _selectedTagFilters.Count > 0
+        };
+        clearItem.Click += OnClearTagFiltersClick;
+        TagFilterSubItem.Items.Add(clearItem);
+        TagFilterSubItem.Items.Add(new MenuFlyoutSeparator());
+
+        var allTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Include standard Unity presets
+        foreach (var tag in new[] { "Game", "Client Project", "Prototype", "Personal", "Simulation", "Archived", "Visualization", "Work in Progress", "2D", "3D" })
+        {
+            allTags.Add(tag);
+        }
+
+        // Include tags from loaded templates
+        foreach (var template in _allTemplates)
+        {
+            if (template.Tags is not null)
+            {
+                foreach (var tag in template.Tags)
+                {
+                    if (!string.IsNullOrWhiteSpace(tag))
+                        allTags.Add(tag.Trim());
+                }
             }
         }
 
-        SaveTemplateOptions();
+        // Include tags stored in settings
+        if (_settings.ProjectTags is not null)
+        {
+            foreach (var tagsList in _settings.ProjectTags.Values)
+            {
+                foreach (var tag in tagsList)
+                {
+                    if (!string.IsNullOrWhiteSpace(tag))
+                        allTags.Add(tag.Trim());
+                }
+            }
+        }
+
+        if (_selectedTagFilters.RemoveWhere(tag => !allTags.Contains(tag)) > 0)
+        {
+            SaveTemplateOptions();
+        }
+
+        var sortedTags = allTags
+            .OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (sortedTags.Count == 0)
+        {
+            TagFilterSubItem.Items.Add(new MenuFlyoutItem
+            {
+                Text = "No tags available",
+                IsEnabled = false
+            });
+        }
+        else
+        {
+            foreach (var tag in sortedTags)
+            {
+                var item = new ToggleMenuFlyoutItem
+                {
+                    Text = tag,
+                    Tag = tag,
+                    IsChecked = _selectedTagFilters.Contains(tag)
+                };
+                item.Click += OnTagFilterClick;
+                TagFilterSubItem.Items.Add(item);
+            }
+        }
     }
 
-    private void OnAllEditorVersionsFilterClick(object sender, RoutedEventArgs e)
+    private void UpdateFilterLabels()
     {
-        _selectedEditorFilters.Clear();
-        foreach (var option in _editorFilterOptions)
+        if (EditorFilterSubItem is not null)
         {
-            option.IsSelected = false;
+            EditorFilterSubItem.Text = _selectedEditorFilters.Count == 0
+                ? "Filter by Editor version"
+                : $"Editor version ({_selectedEditorFilters.Count})";
         }
 
-        foreach (var item in EditorVersionFilterFlyout.Items.OfType<ToggleMenuFlyoutItem>())
+        if (TagFilterSubItem is not null)
         {
-            item.IsChecked = ReferenceEquals(item, _allEditorVersionsMenuItem);
+            TagFilterSubItem.Text = _selectedTagFilters.Count == 0
+                ? "Filter by tag"
+                : $"Tag ({_selectedTagFilters.Count})";
         }
-
-        SaveTemplateOptions();
-        FilterAndDisplayTemplates();
     }
 
     private void OnEditorVersionFilterClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not ToggleMenuFlyoutItem
-            {
-                Tag: TemplateEditorFilterOption option
-            } item)
-        {
+        if (sender is not ToggleMenuFlyoutItem { Tag: string version } item)
             return;
-        }
 
-        option.IsSelected = item.IsChecked;
         if (item.IsChecked)
-        {
-            _selectedEditorFilters.Add(option.Version);
-        }
+            _selectedEditorFilters.Add(version);
         else
-        {
-            _selectedEditorFilters.Remove(option.Version);
-        }
+            _selectedEditorFilters.Remove(version);
 
-        if (_allEditorVersionsMenuItem is not null)
-        {
-            _allEditorVersionsMenuItem.IsChecked = _selectedEditorFilters.Count == 0;
-        }
+        SaveTemplateOptions();
+        RebuildFilterMenus();
+        FilterAndDisplayTemplates();
+    }
 
+    private void OnClearEditorFiltersClick(object sender, RoutedEventArgs e)
+    {
+        _selectedEditorFilters.Clear();
+        SaveTemplateOptions();
+        RebuildFilterMenus();
+        FilterAndDisplayTemplates();
+    }
+
+    private void OnTagFilterClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleMenuFlyoutItem { Tag: string tag } item)
+            return;
+
+        if (item.IsChecked)
+            _selectedTagFilters.Add(tag);
+        else
+            _selectedTagFilters.Remove(tag);
+
+        SaveTemplateOptions();
+        RebuildFilterMenus();
+        FilterAndDisplayTemplates();
+    }
+
+    private void OnClearTagFiltersClick(object sender, RoutedEventArgs e)
+    {
+        _selectedTagFilters.Clear();
+        SaveTemplateOptions();
+        RebuildFilterMenus();
+        FilterAndDisplayTemplates();
+    }
+
+    private void OnDisplayOptionClick(object sender, RoutedEventArgs e)
+    {
         SaveTemplateOptions();
         FilterAndDisplayTemplates();
     }
@@ -323,7 +447,12 @@ public sealed partial class TemplatesPage : Page
         _settings.TemplateEditorFilters = _selectedEditorFilters
             .OrderBy(version => version, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        _settings.TemplateTagFilters = _selectedTagFilters
+            .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _settings.TemplateHideMissingEditors = HideMissingEditorsItem?.IsChecked ?? false;
         _settingsStore.Save(_settings);
+        UpdateFilterLabels();
     }
 
     private void SyncSortFlyout()
@@ -485,6 +614,52 @@ public sealed partial class TemplatesPage : Page
         }
     }
 
+    private async void OnManageTemplateTagsClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not CustomTemplateInfo template)
+        {
+            return;
+        }
+
+        try
+        {
+            var activeXamlRoot = XamlRoot ?? Content?.XamlRoot;
+            if (activeXamlRoot is null) return;
+
+            var existingGlobalTags = _allTemplates.SelectMany(t => t.Tags ?? Enumerable.Empty<string>()).Distinct();
+            var dialog = new Dialogs.ManageProjectTagsDialog(
+                template.Name,
+                template.Tags ?? [],
+                "Template",
+                existingGlobalTags)
+            {
+                XamlRoot = activeXamlRoot,
+                RequestedTheme = (activeXamlRoot.Content as FrameworkElement)?.RequestedTheme ?? MainWindow.Instance?.CurrentTheme ?? ElementTheme.Default
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var updatedTags = dialog.ResultTags;
+                var updatedTemplate = await _templateService.UpdateCustomTemplateAsync(
+                    template,
+                    template.Description ?? string.Empty,
+                    template.Version,
+                    replacementImagePath: null,
+                    removeImage: false,
+                    tags: updatedTags);
+
+                await ReloadDataAsync();
+                ShowStatus("Tags updated", $"Tags for “{template.Name}” have been updated.", InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OnManageTemplateTagsClick failed: {ex}");
+            ShowStatus("Failed to update tags", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
     private void OnShowInExplorerClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not CustomTemplateInfo template)
@@ -557,6 +732,82 @@ public sealed partial class TemplatesPage : Page
         {
             Debug.WriteLine($"OnDeleteTemplateClick failed: {ex}");
             ShowStatus("Template could not be deleted", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnInstallMissingEditorClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not CustomTemplateInfo template)
+        {
+            return;
+        }
+
+        try
+        {
+            var xamlRoot = XamlRoot ?? Content?.XamlRoot;
+            if (xamlRoot is null)
+            {
+                ShowStatus("Unable to open the Editor installer", "Window is not ready.", InfoBarSeverity.Error);
+                return;
+            }
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
+                ?? MainWindow.Instance?.CurrentTheme
+                ?? ElementTheme.Default;
+
+            UnityEditorRelease? release = null;
+            if (!string.IsNullOrWhiteSpace(template.EditorVersion))
+            {
+                try
+                {
+                    release = await _releaseService.GetReleaseAsync(template.EditorVersion);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Unable to resolve Unity {template.EditorVersion}: {ex}");
+                }
+            }
+
+            if (release is null)
+            {
+                var dialog = new InstallEditorDialog(_installedEditors.Keys, template.EditorVersion)
+                {
+                    XamlRoot = xamlRoot,
+                    RequestedTheme = targetTheme
+                };
+
+                await dialog.ShowAsync();
+                release = dialog.SelectedRelease;
+            }
+
+            if (release is null)
+            {
+                return;
+            }
+
+            var installRoot = new UnityHubLocationSettingsService().GetInstallLocation();
+            var modulesDialog = new AddModulesDialog(release, installRoot)
+            {
+                XamlRoot = xamlRoot,
+                RequestedTheme = targetTheme
+            };
+
+            await modulesDialog.ShowAsync();
+            if (modulesDialog.InstallationRequest is null)
+            {
+                return;
+            }
+
+            var result = UnityModuleInstallationManager.Instance.Enqueue(modulesDialog.InstallationRequest);
+            ShowStatus(
+                result.Accepted ? "Installation started" : "Installation warning",
+                result.Message,
+                result.Accepted ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OnInstallMissingEditorClick failed: {ex}");
+            ShowStatus("Unable to open the Editor installer", ex.Message, InfoBarSeverity.Error);
         }
     }
 

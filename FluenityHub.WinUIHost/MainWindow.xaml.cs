@@ -32,6 +32,9 @@ public sealed partial class MainWindow : Window
     private bool _isExitingFromTray;
     private readonly DispatcherTimer _priorityMonitorTimer = new();
     private readonly DispatcherTimer _taskbarErrorClearTimer = new();
+    private readonly DispatcherTimer _networkStatusClearTimer = new();
+    private readonly NetworkConnectivityService _networkConnectivityService =
+        NetworkConnectivityService.Current;
     private readonly UnityCliAuthService _unityCliAuthService = new();
     private readonly UnityLogoutSecurityService _unityLogoutSecurityService = new();
     private readonly UnityModuleInstallationManager _moduleInstallationManager =
@@ -72,10 +75,16 @@ public sealed partial class MainWindow : Window
             handledEventsToo: true);
         _moduleInstallationManager.AttachDispatcher(DispatcherQueue);
         _moduleInstallationManager.OperationChanged += OnModuleInstallationChanged;
+        JumpListService.SetWindowAppUserModelId(WindowHandle);
         _taskbarProgressService = new TaskbarProgressService(WindowHandle);
         _taskbarErrorClearTimer.Interval = TimeSpan.FromSeconds(6);
         _taskbarErrorClearTimer.Tick += OnTaskbarErrorClearTimerTick;
         Activated += OnWindowActivatedForTaskbarProgress;
+        Closed += OnMainWindowClosed;
+        _networkConnectivityService.StateChanged += OnNetworkStateChanged;
+        _networkStatusClearTimer.Interval = TimeSpan.FromSeconds(4);
+        _networkStatusClearTimer.Tick += OnNetworkStatusClearTimerTick;
+        UpdateNetworkStatus(_networkConnectivityService.State, showOnlineConfirmation: false);
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -145,6 +154,64 @@ public sealed partial class MainWindow : Window
         RootFrame.Navigate(typeof(MainPage));
 
         CheckAppUpdatesOnLaunch();
+    }
+
+    private void OnNetworkStateChanged(object? sender, NetworkStateChangedEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            UpdateNetworkStatus(
+                e.CurrentState,
+                showOnlineConfirmation: e.PreviousState is
+                    AppNetworkState.Offline or AppNetworkState.Limited));
+    }
+
+    private void UpdateNetworkStatus(
+        AppNetworkState state,
+        bool showOnlineConfirmation)
+    {
+        _networkStatusClearTimer.Stop();
+        switch (state)
+        {
+            case AppNetworkState.Offline:
+                NetworkStatusInfoBar.Severity = InfoBarSeverity.Warning;
+                NetworkStatusInfoBar.Title = "You're offline";
+                NetworkStatusInfoBar.Message =
+                    "Online features are unavailable. Local projects, Editors, templates, backups, and offline installers still work.";
+                NetworkStatusInfoBar.IsOpen = true;
+                break;
+
+            case AppNetworkState.Limited:
+                NetworkStatusInfoBar.Severity = InfoBarSeverity.Warning;
+                NetworkStatusInfoBar.Title = "Internet access is limited";
+                NetworkStatusInfoBar.Message =
+                    "Some online services may be unavailable. Local features still work.";
+                NetworkStatusInfoBar.IsOpen = true;
+                break;
+
+            case AppNetworkState.Online when showOnlineConfirmation:
+                NetworkStatusInfoBar.Severity = InfoBarSeverity.Success;
+                NetworkStatusInfoBar.Title = "Back online";
+                NetworkStatusInfoBar.Message = "Online features are available again.";
+                NetworkStatusInfoBar.IsOpen = true;
+                _networkStatusClearTimer.Start();
+                break;
+
+            default:
+                NetworkStatusInfoBar.IsOpen = false;
+                break;
+        }
+    }
+
+    private void OnNetworkStatusClearTimerTick(object? sender, object e)
+    {
+        _networkStatusClearTimer.Stop();
+        NetworkStatusInfoBar.IsOpen = false;
+    }
+
+    private void OnMainWindowClosed(object sender, WindowEventArgs args)
+    {
+        _networkConnectivityService.StateChanged -= OnNetworkStateChanged;
+        _networkStatusClearTimer.Stop();
     }
 
     private AppUpdateInfo? _currentUpdateInfo;
@@ -784,6 +851,35 @@ public sealed partial class MainWindow : Window
         {
             var state = await Task.Run(ReadSharedUnityAccountState);
             UpdateUnityAccountState(state);
+
+            if (state.IsLoggedIn && NetworkConnectivityService.Current.CanAttemptInternet)
+            {
+                if (UnitySharedAuthService.TryGetActiveAccessToken(out var token, out _)
+                    && token is not null
+                    && !UnitySharedAuthService.IsAccessTokenUsable(token)
+                    && UnitySharedAuthService.HasUsableRefreshToken(token))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var (refreshed, _) = await UnitySharedAuthService.RefreshOAuthTokenAsync();
+                            if (refreshed is not null)
+                            {
+                                DispatcherQueue.TryEnqueue(() =>
+                                {
+                                    var updatedState = ReadSharedUnityAccountState();
+                                    UpdateUnityAccountState(updatedState);
+                                });
+                            }
+                        }
+                        catch
+                        {
+                            // Best-effort background refresh
+                        }
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -811,6 +907,38 @@ public sealed partial class MainWindow : Window
                 string.Empty,
                 string.Empty,
                 cliStatus.IsInstalled ? "Not signed in" : "Install Unity CLI from Settings before signing in.");
+        }
+
+        if (!UnitySharedAuthService.TryGetActiveAccessToken(out var token, out _)
+            || token is null)
+        {
+            return new UnityCliAuthState(
+                cliStatus.IsInstalled,
+                false,
+                account.DisplayName,
+                account.Email,
+                "oauth",
+                "Unity sign-in expired. Sign in again to continue.")
+            {
+                SessionState = "expired"
+            };
+        }
+
+        var hasValidAccess = UnitySharedAuthService.IsAccessTokenUsable(token);
+        var hasValidRefresh = UnitySharedAuthService.HasUsableRefreshToken(token);
+
+        if (!hasValidAccess && !hasValidRefresh)
+        {
+            return new UnityCliAuthState(
+                cliStatus.IsInstalled,
+                false,
+                account.DisplayName,
+                account.Email,
+                "oauth",
+                "Unity sign-in expired. Sign in again to continue.")
+            {
+                SessionState = "expired"
+            };
         }
 
         return new UnityCliAuthState(
@@ -1150,6 +1278,41 @@ public sealed partial class MainWindow : Window
         if (RootFrame.Content is MainPage mainPage)
         {
             mainPage.OpenExternalProjectPath(projectPath);
+        }
+        else
+        {
+            Microsoft.UI.Xaml.Navigation.NavigatedEventHandler? handler = null;
+            handler = (s, e) =>
+            {
+                RootFrame.Navigated -= handler;
+                if (RootFrame.Content is MainPage page)
+                {
+                    page.OpenExternalProjectPath(projectPath);
+                }
+            };
+            RootFrame.Navigated += handler;
+        }
+    }
+
+    public void HandleExternalAction(string action)
+    {
+        RestoreWindow();
+        if (RootFrame.Content is MainPage mainPage)
+        {
+            mainPage.HandleExternalAction(action);
+        }
+        else
+        {
+            Microsoft.UI.Xaml.Navigation.NavigatedEventHandler? handler = null;
+            handler = (s, e) =>
+            {
+                RootFrame.Navigated -= handler;
+                if (RootFrame.Content is MainPage page)
+                {
+                    page.HandleExternalAction(action);
+                }
+            };
+            RootFrame.Navigated += handler;
         }
     }
 

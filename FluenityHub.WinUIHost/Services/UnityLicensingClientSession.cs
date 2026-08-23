@@ -24,7 +24,7 @@ internal sealed class UnityLicensingClientSession : IDisposable
 
     public static async Task<(UnityLicensingClientSession? Session, string ErrorMessage)> StartAsync(
         string editorExecutable,
-        string accessToken,
+        string? accessToken,
         CancellationToken cancellationToken)
     {
         var licensingClientPath = Path.Combine(
@@ -58,8 +58,11 @@ internal sealed class UnityLicensingClientSession : IDisposable
         startInfo.ArgumentList.Add(fullPipeName);
         startInfo.ArgumentList.Add("--cloudEnvironment");
         startInfo.ArgumentList.Add("production");
-        startInfo.ArgumentList.Add("--accessToken");
-        startInfo.ArgumentList.Add(accessToken);
+        if (!string.IsNullOrWhiteSpace(accessToken))
+        {
+            startInfo.ArgumentList.Add("--accessToken");
+            startInfo.ArgumentList.Add(accessToken);
+        }
 
         Process? process = null;
         try

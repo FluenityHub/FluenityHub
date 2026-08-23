@@ -116,6 +116,8 @@ public sealed class UnityModuleService
             throw new InvalidDataException("The license document must use a secure HTTPS address.");
         }
 
+        NetworkConnectivityService.Current.EnsureCanAttemptInternet();
+
         using var response = await LicenseHttpClient.GetAsync(
             term.NavigateUri,
             HttpCompletionOption.ResponseHeadersRead,

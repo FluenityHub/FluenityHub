@@ -35,6 +35,8 @@ public sealed class AppSettings
 
     // Template page options
     public List<string> TemplateEditorFilters { get; set; } = [];
+    public List<string> TemplateTagFilters { get; set; } = [];
+    public bool TemplateHideMissingEditors { get; set; } = false;
     public string TemplateSortCriteria { get; set; } = "CreatedAt";
     public bool TemplateSortAscending { get; set; } = false;
 }

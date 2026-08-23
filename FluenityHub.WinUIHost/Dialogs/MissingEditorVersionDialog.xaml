@@ -70,11 +70,7 @@
             Grid.Row="5"
             Margin="-8,0,0,-4"
             AutomationProperties.Name="Install another Unity Editor version"
-            Click="OnInstallOtherVersionClick">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <FontIcon FontSize="14" Glyph="&#xE896;" />
-                <TextBlock Text="Install another version" />
-            </StackPanel>
-        </HyperlinkButton>
+            Click="OnInstallOtherVersionClick"
+            Content="Install another version" />
     </Grid>
 </ContentDialog>

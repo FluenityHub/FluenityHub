@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using FluenityHub_WinUIHost.Dialogs;
+using FluenityHub_WinUIHost.Helpers;
 using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
@@ -284,6 +285,23 @@ public sealed partial class EditorsPage : Page
         }
     }
 
+    private async void OnContextLaunchUnityCliClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: UnityEditorInfo editor })
+        {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            var targetTheme = (xamlRoot?.Content as FrameworkElement)?.RequestedTheme
+                ?? MainWindow.Instance?.CurrentTheme
+                ?? ElementTheme.Default;
+
+            await UnityCliLaunchService.LaunchTerminalAsync(
+                editor.InstallDirectory,
+                editor.ExecutablePath,
+                xamlRoot,
+                targetTheme);
+        }
+    }
+
     private void OnContextOpenFolderClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: UnityEditorInfo editor })
@@ -301,7 +319,10 @@ public sealed partial class EditorsPage : Page
 
         try
         {
-            var targetTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default;
 
@@ -312,7 +333,7 @@ public sealed partial class EditorsPage : Page
                 PrimaryButtonText = "Reset Sandbox",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
-                XamlRoot = XamlRoot,
+                XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme,
                 Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style
             };
@@ -354,16 +375,19 @@ public sealed partial class EditorsPage : Page
 
         try
         {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
             var projectCount = _projectService
                 .GetRecentProjects()
                 .Count(project => project.Version.Equals(editor.Version, StringComparison.OrdinalIgnoreCase));
-            var targetTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default;
 
             var dialog = new AddModulesDialog(editor, projectCount)
             {
-                XamlRoot = XamlRoot,
+                XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme
             };
 
@@ -396,6 +420,9 @@ public sealed partial class EditorsPage : Page
 
     private async Task<bool> ConfirmModuleRemovalAsync(UnityModuleInstallationRequest request)
     {
+        var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+        if (xamlRoot is null) return false;
+
         var moduleName = request.Modules[0].Name;
         var dialog = new ContentDialog
         {
@@ -404,8 +431,8 @@ public sealed partial class EditorsPage : Page
             PrimaryButtonText = "Remove",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-            RequestedTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            XamlRoot = xamlRoot,
+            RequestedTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default
         };
@@ -416,13 +443,20 @@ public sealed partial class EditorsPage : Page
     {
         try
         {
-            var targetTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null)
+            {
+                ShowStatus("Unable to open the Editor installer", "Window is not ready.", InfoBarSeverity.Error);
+                return;
+            }
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default;
 
             var dialog = new InstallEditorDialog(_allEditors.Select(editor => editor.Version))
             {
-                XamlRoot = XamlRoot,
+                XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme
             };
             await dialog.ShowAsync();
@@ -435,7 +469,7 @@ public sealed partial class EditorsPage : Page
             var installRoot = _unityHubLocationSettingsService.GetInstallLocation();
             var modulesDialog = new AddModulesDialog(dialog.SelectedRelease, installRoot)
             {
-                XamlRoot = XamlRoot,
+                XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme
             };
             await modulesDialog.ShowAsync();
@@ -462,6 +496,26 @@ public sealed partial class EditorsPage : Page
         }
     }
 
+    public async void TriggerInstallEditorFlow()
+    {
+        try
+        {
+            while (_isReloadingEditors)
+            {
+                await Task.Delay(50);
+            }
+
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            OnInstallEditorClick(this, new RoutedEventArgs());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"TriggerInstallEditorFlow failed: {ex}");
+        }
+    }
+
     private void OnContextReleaseNotesClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: UnityEditorInfo editor })
@@ -476,10 +530,13 @@ public sealed partial class EditorsPage : Page
         {
             if (sender is FrameworkElement { Tag: UnityEditorInfo editor })
             {
+                var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+                if (xamlRoot is null) return;
+
                 var dialog = new Dialogs.EditorIntegrityDialog(editor)
                 {
-                    XamlRoot = XamlRoot,
-                    RequestedTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+                    XamlRoot = xamlRoot,
+                    RequestedTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                         ?? MainWindow.Instance?.CurrentTheme
                         ?? ElementTheme.Default
                 };
@@ -1039,7 +1096,10 @@ public sealed partial class EditorsPage : Page
     {
         try
         {
-            var targetTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default;
 
@@ -1051,7 +1111,7 @@ public sealed partial class EditorsPage : Page
 
             var dialog = new LaunchEditorDialog(editor, matchingRecentProject)
             {
-                XamlRoot = XamlRoot,
+                XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme
             };
 
@@ -1094,7 +1154,7 @@ public sealed partial class EditorsPage : Page
                         var installedVersions = _allEditors.Select(e => e.Version).ToList();
                         var newProjDialog = new NewProjectDialog(installedVersions, selectedTemplate: null, initialVersion: editor.Version)
                         {
-                            XamlRoot = XamlRoot,
+                            XamlRoot = xamlRoot,
                             RequestedTheme = targetTheme
                         };
 

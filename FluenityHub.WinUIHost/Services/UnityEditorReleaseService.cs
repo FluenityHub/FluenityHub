@@ -56,6 +56,7 @@ public sealed class UnityEditorReleaseService
         string? versionQuery = null,
         CancellationToken cancellationToken = default)
     {
+        NetworkConnectivityService.Current.EnsureCanAttemptInternet();
         offset = Math.Max(0, offset);
         limit = Math.Clamp(limit, 1, 25);
         var query = new List<string>

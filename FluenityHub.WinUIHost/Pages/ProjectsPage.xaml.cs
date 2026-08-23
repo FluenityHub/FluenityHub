@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using FluenityHub_WinUIHost.Dialogs;
+using FluenityHub_WinUIHost.Helpers;
 using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
@@ -47,7 +48,7 @@ public sealed partial class ProjectsPage : Page
     private readonly HashSet<string> _selectedTagFilters = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedEditorFilters = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedPlatformFilters = new(StringComparer.OrdinalIgnoreCase);
-    private string _groupByMode = "None"; // "None", "Folder", "SourceControl", "EditorVersion"
+    private string _groupByMode = "None"; // "None", "Folder", "SourceControl", "EditorVersion", "Platform"
     private readonly HashSet<string> _collapsedProjectGroupKeys = new(StringComparer.Ordinal);
 
     [Conditional("DEBUG")]
@@ -1036,12 +1037,15 @@ public sealed partial class ProjectsPage : Page
         }
 
         // Include tags stored in settings
-        foreach (var tagsList in _settings.ProjectTags.Values)
+        if (_settings.ProjectTags is not null)
         {
-            foreach (var tag in tagsList)
+            foreach (var tagsList in _settings.ProjectTags.Values)
             {
-                if (!string.IsNullOrWhiteSpace(tag))
-                    allTags.Add(tag.Trim());
+                foreach (var tag in tagsList)
+                {
+                    if (!string.IsNullOrWhiteSpace(tag))
+                        allTags.Add(tag.Trim());
+                }
             }
         }
 
@@ -1381,17 +1385,50 @@ public sealed partial class ProjectsPage : Page
     {
         try
         {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
+                ?? MainWindow.Instance?.CurrentTheme
+                ?? ElementTheme.Default;
+
             var installedVersions = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
             if (!installedVersions.Any())
             {
-                ShowStatus("No installed Unity Editors found. Install an editor before creating a project.", InfoBarSeverity.Warning);
+                var noEditorDialog = new ContentDialog
+                {
+                    Title = "Locate or install Unity Editor",
+                    Content = new TextBlock
+                    {
+                        Text = "Locate or install a Unity Editor version for your new project.",
+                        TextWrapping = TextWrapping.Wrap,
+                        Style = Application.Current.Resources["BodyTextBlockStyle"] as Style
+                    },
+                    PrimaryButtonText = "Install Editor",
+                    SecondaryButtonText = "Locate",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = xamlRoot,
+                    RequestedTheme = targetTheme,
+                    Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style
+                };
+
+                var choice = await noEditorDialog.ShowAsync();
+                if (choice == ContentDialogResult.Primary)
+                {
+                    await ShowInstallEditorFlowAsync();
+                }
+                else if (choice == ContentDialogResult.Secondary)
+                {
+                    await LocateEditorFlowAsync();
+                }
                 return;
             }
 
             var dialog = new FluenityHub_WinUIHost.Dialogs.NewProjectDialog(installedVersions)
             {
-                XamlRoot = Content.XamlRoot,
-                RequestedTheme = (Content.XamlRoot.Content as FrameworkElement)?.RequestedTheme ?? MainWindow.Instance?.CurrentTheme ?? ElementTheme.Default
+                XamlRoot = xamlRoot,
+                RequestedTheme = targetTheme
             };
 
             var result = await dialog.ShowAsync();
@@ -1400,11 +1437,123 @@ public sealed partial class ProjectsPage : Page
                 _projectService.AddOrUpdateProject(dialog.CreatedProjectPath, dialog.CreatedProjectTitle, dialog.SelectedVersion);
                 ReloadData(showSuccessMessage: false);
                 ShowStatus($"New project '{dialog.CreatedProjectTitle}' created successfully.", InfoBarSeverity.Success);
+                _ = JumpListService.RefreshAsync();
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"OnNewProjectClick failed: {ex}");
+        }
+    }
+
+    public async void TriggerNewProjectFlow()
+    {
+        try
+        {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            OnNewProjectClick(this, new RoutedEventArgs());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"TriggerNewProjectFlow failed: {ex}");
+        }
+    }
+
+    private async Task ShowInstallEditorFlowAsync()
+    {
+        try
+        {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+
+            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
+                ?? MainWindow.Instance?.CurrentTheme
+                ?? ElementTheme.Default;
+
+            var allInstalled = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
+            var dialog = new InstallEditorDialog(allInstalled)
+            {
+                XamlRoot = xamlRoot,
+                RequestedTheme = targetTheme
+            };
+            await dialog.ShowAsync();
+            if (dialog.SelectedRelease is null)
+            {
+                return;
+            }
+
+            _settings = _settingsStore.Load();
+            var installRoot = _unityHubLocationSettingsService.GetInstallLocation();
+            var modulesDialog = new AddModulesDialog(dialog.SelectedRelease, installRoot)
+            {
+                XamlRoot = xamlRoot,
+                RequestedTheme = targetTheme
+            };
+            await modulesDialog.ShowAsync();
+            if (modulesDialog.InstallationRequest is null)
+            {
+                return;
+            }
+
+            var result = _moduleInstallationManager.Enqueue(modulesDialog.InstallationRequest);
+            ShowStatus(
+                result.Message,
+                result.Accepted ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+            if (result.Accepted)
+            {
+                ReloadData(showSuccessMessage: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Unable to open Install Editor: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task LocateEditorFlowAsync()
+    {
+        try
+        {
+            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
+            if (xamlRoot is null) return;
+            var windowId = xamlRoot.ContentIslandEnvironment.AppWindowId;
+
+            var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(windowId)
+            {
+                Title = "Add a Unity Editor",
+                CommitButtonText = "Select folder",
+                SuggestedStartLocation = Microsoft.Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
+                ViewMode = Microsoft.Windows.Storage.Pickers.PickerViewMode.List
+            };
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null)
+            {
+                var folderPath = folder.Path;
+                _settings = _settingsStore.Load();
+                var updatedPaths = new List<string>(_settings.CustomEditorPaths);
+                if (!updatedPaths.Contains(folderPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    updatedPaths.Add(folderPath);
+                    _settings.CustomEditorPaths = updatedPaths;
+                    _settingsStore.Save(_settings);
+                }
+
+                ReloadData(showSuccessMessage: false);
+                ShowStatus($"Located Unity Editor folder: {folderPath}", InfoBarSeverity.Success);
+
+                var installedAfterLocate = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
+                if (installedAfterLocate.Any())
+                {
+                    OnNewProjectClick(this, new RoutedEventArgs());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to locate Editor folder: {ex.Message}", InfoBarSeverity.Error);
         }
     }
 
@@ -1475,28 +1624,18 @@ public sealed partial class ProjectsPage : Page
     {
         try
         {
-            if (!IsLoaded || XamlRoot is null)
-            {
-                var tcs = new TaskCompletionSource();
-                RoutedEventHandler? loadedHandler = null;
-                loadedHandler = (s, e) =>
-                {
-                    Loaded -= loadedHandler;
-                    tcs.SetResult();
-                };
-                Loaded += loadedHandler;
-                await tcs.Task;
-            }
-
-            await Task.Yield();
-
-            var activeXamlRoot = XamlRoot ?? Content?.XamlRoot;
+            var activeXamlRoot = await XamlRootResolver.ResolveAsync(this);
             if (activeXamlRoot is null) return;
 
             var targetTheme = (activeXamlRoot.Content as FrameworkElement)?.RequestedTheme
                 ?? MainWindow.Instance?.CurrentTheme
                 ?? ElementTheme.Default;
-            var dialog = new MissingEditorVersionDialog(project, _installedEditors)
+
+            var editors = _installedEditors.Any()
+                ? _installedEditors
+                : _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths);
+
+            var dialog = new MissingEditorVersionDialog(project, editors)
             {
                 XamlRoot = activeXamlRoot,
                 RequestedTheme = targetTheme
@@ -1749,14 +1888,23 @@ public sealed partial class ProjectsPage : Page
 
     private async Task<string?> CreateProjectShareLinkAsync(UnityProjectInfo project)
     {
-        var result = await _projectShareLinkService.CreateAsync(project);
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Link))
+        try
         {
-            ShowStatus(result.Message, InfoBarSeverity.Error);
-            return null;
-        }
+            var result = await _projectShareLinkService.CreateAsync(project);
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Link))
+            {
+                ShowStatus(result.Message, InfoBarSeverity.Error);
+                return null;
+            }
 
-        return result.Link;
+            return result.Link;
+        }
+        finally
+        {
+            // A user-requested share can complete a browser reauthentication.
+            // Refresh the title-bar identity once that flow settles.
+            _ = MainWindow.Instance?.RefreshUnityAccountStateAsync();
+        }
     }
 
     private void OnContextOpenTerminalClick(object sender, RoutedEventArgs e)
@@ -1767,11 +1915,35 @@ public sealed partial class ProjectsPage : Page
         }
     }
 
+    private async void OnContextLaunchUnityCliClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: ProjectListItemViewModel viewModel })
+        {
+            var project = viewModel.Project;
+            var editorExecutable = _editorLocator.FindEditorExecutable(project.Version, _installedEditors);
+            var targetTheme = (Content?.XamlRoot?.Content as FrameworkElement)?.RequestedTheme
+                ?? MainWindow.Instance?.CurrentTheme
+                ?? ElementTheme.Default;
+
+            await UnityCliLaunchService.LaunchTerminalAsync(
+                project.Path,
+                editorExecutable,
+                Content?.XamlRoot,
+                targetTheme);
+        }
+    }
+
     private void OnOpenInIdeSubItemLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuFlyoutSubItem subItem) return;
 
         var viewModel = subItem.DataContext as ProjectListItemViewModel;
+        if (ReferenceEquals(subItem.Tag, viewModel) && subItem.Items.Count > 0)
+        {
+            return;
+        }
+        subItem.Tag = viewModel;
+
         var projectPath = viewModel?.Project.Path;
 
         subItem.Items.Clear();
@@ -1817,6 +1989,12 @@ public sealed partial class ProjectsPage : Page
 
         var viewModel = subItem.DataContext as ProjectListItemViewModel;
         if (viewModel is null) return;
+
+        if (ReferenceEquals(subItem.Tag, viewModel) && subItem.Items.Count > 0)
+        {
+            return;
+        }
+        subItem.Tag = viewModel;
 
         var project = viewModel.Project;
         var editorExecutable = _editorLocator.FindEditorExecutable(project.Version, _installedEditors);
@@ -2584,8 +2762,14 @@ public sealed partial class ProjectsPage : Page
         var editorExecutable = _editorLocator.FindEditorExecutable(project.Version, _installedEditors);
         if (string.IsNullOrWhiteSpace(editorExecutable))
         {
-            _ = ShowVersionPickerDialog(project);
-            return;
+            _settings = _settingsStore.Load();
+            var freshInstalled = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths);
+            editorExecutable = _editorLocator.FindEditorExecutable(project.Version, freshInstalled);
+            if (string.IsNullOrWhiteSpace(editorExecutable))
+            {
+                _ = ShowVersionPickerDialog(project);
+                return;
+            }
         }
 
         _ = LaunchProjectWithEditorAsync(
@@ -2631,7 +2815,7 @@ public sealed partial class ProjectsPage : Page
         }
     }
 
-    public void OpenExternalProjectPath(string projectPath)
+    public async void OpenExternalProjectPath(string projectPath)
     {
         if (string.IsNullOrWhiteSpace(projectPath))
         {
@@ -2639,6 +2823,19 @@ public sealed partial class ProjectsPage : Page
         }
 
         var normalizedPath = Path.GetFullPath(projectPath.Trim().Trim('"'));
+        if (!Directory.Exists(normalizedPath))
+        {
+            ShowStatus($"Project folder not found: {normalizedPath}", InfoBarSeverity.Error);
+            return;
+        }
+
+        var attempts = 0;
+        while (_isReloadingData && attempts < 20)
+        {
+            await Task.Delay(50);
+            attempts++;
+        }
+
         var project = _allProjects.FirstOrDefault(candidate =>
             string.Equals(
                 Path.GetFullPath(candidate.Path),
@@ -2648,29 +2845,28 @@ public sealed partial class ProjectsPage : Page
         if (project is null)
         {
             var versionFile = Path.Combine(normalizedPath, "ProjectSettings", "ProjectVersion.txt");
-            if (!File.Exists(versionFile))
+            var version = string.Empty;
+            if (File.Exists(versionFile))
             {
-                ShowStatus("The selected folder is not a Unity project.", InfoBarSeverity.Warning);
-                return;
+                var versionLine = File.ReadLines(versionFile)
+                    .FirstOrDefault(line => line.StartsWith("m_EditorVersion:", StringComparison.OrdinalIgnoreCase));
+                version = versionLine?.Split(':', 2).ElementAtOrDefault(1)?.Trim() ?? string.Empty;
             }
 
-            var versionLine = File.ReadLines(versionFile)
-                .FirstOrDefault(line => line.StartsWith("m_EditorVersion:", StringComparison.OrdinalIgnoreCase));
-            var version = versionLine?.Split(':', 2).ElementAtOrDefault(1)?.Trim() ?? string.Empty;
             var title = Path.GetFileName(Path.TrimEndingDirectorySeparator(normalizedPath));
+
+            project = new UnityProjectInfo
+            {
+                Path = normalizedPath,
+                Title = title,
+                Version = version
+            };
+
             _projectService.AddOrUpdateProject(normalizedPath, title, version);
             ReloadData(showSuccessMessage: false);
-            project = _allProjects.FirstOrDefault(candidate =>
-                string.Equals(
-                    Path.GetFullPath(candidate.Path),
-                    normalizedPath,
-                    StringComparison.OrdinalIgnoreCase));
         }
 
-        if (project is not null)
-        {
-            TryOpenProject(project);
-        }
+        TryOpenProject(project);
     }
 
     private CancellationTokenSource? _infoBarCts;
@@ -2731,6 +2927,7 @@ public sealed partial class ProjectsPage : Page
             else if (item == GroupByFolderItem) _groupByMode = "Folder";
             else if (item == GroupBySourceControlItem) _groupByMode = "SourceControl";
             else if (item == GroupByEditorVersionItem) _groupByMode = "EditorVersion";
+            else if (item == GroupByPlatformItem) _groupByMode = "Platform";
 
             ApplyFilterAndSort(refreshSourceControl: false);
         }
@@ -2773,6 +2970,19 @@ public sealed partial class ProjectsPage : Page
             foreach (var g in grouped)
             {
                 result.Add(CreateProjectGroupViewModel(g.Key, "\uE74C", g));
+            }
+        }
+        else if (mode == "Platform")
+        {
+            var grouped = viewModels
+                .GroupBy(vm => !string.IsNullOrWhiteSpace(vm.SelectedTargetPlatform?.DisplayName)
+                    ? vm.SelectedTargetPlatform.DisplayName
+                    : (!string.IsNullOrWhiteSpace(vm.Project.BuildTarget) ? vm.Project.BuildTarget : "Unknown Platform"))
+                .OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase);
+
+            foreach (var g in grouped)
+            {
+                result.Add(CreateProjectGroupViewModel(g.Key, "\uE902", g));
             }
         }
 
@@ -2890,6 +3100,12 @@ public sealed partial class ProjectsPage : Page
         {
             return;
         }
+
+        if (ReferenceEquals(subItem.Tag, vm) && subItem.Items.Count > 0)
+        {
+            return;
+        }
+        subItem.Tag = vm;
 
         subItem.Items.Clear();
 

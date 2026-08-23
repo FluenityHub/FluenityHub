@@ -866,6 +866,31 @@ public sealed class UnityModuleInstallationManager
                 cancellationToken.ThrowIfCancellationRequested();
                 if (job.Request.InstallsEditor)
                 {
+                    // Clean stale cached installers from previous versions to
+                    // reclaim disk space and avoid corrupt file reuse.
+                    try
+                    {
+                        var activeVersions = new UnityEditorLocator()
+                            .GetInstalledEditors()
+                            .Keys
+                            .Append(job.Request.EditorVersion)
+                            .ToArray();
+                        var reclaimed = UnityEditorInstallationService.CleanStaleCachedInstallers(
+                            job.Request.EditorInstallDirectory,
+                            activeVersions,
+                            line => AppendLogLine(job, line));
+                        if (reclaimed > 0)
+                        {
+                            AppendLogLine(job,
+                                $"Cleaned {FormatBytes(reclaimed)} of stale cached installers before installation.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLogLine(job,
+                            $"Stale cache cleanup was skipped: {ex.Message}");
+                    }
+
                     var editorExecutablePath = Path.Combine(
                         job.Request.EditorInstallDirectory,
                         "Editor",

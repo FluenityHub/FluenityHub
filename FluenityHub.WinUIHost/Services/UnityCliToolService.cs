@@ -64,15 +64,36 @@ public sealed class UnityCliToolService
         try
         {
             var state = ReadState();
-            if (state is null || !IsValidVersion(state.Version) || !Sha256Pattern.IsMatch(state.Sha256))
+            if (state is not null && IsValidVersion(state.Version) && Sha256Pattern.IsMatch(state.Sha256))
             {
-                return new UnityCliStatus(false, null, null);
+                var managedExecutablePath = GetVersionExecutablePath(state.Version);
+                if (File.Exists(managedExecutablePath))
+                {
+                    return new UnityCliStatus(true, state.Version, managedExecutablePath);
+                }
             }
 
-            var executablePath = GetVersionExecutablePath(state.Version);
-            return File.Exists(executablePath)
-                ? new UnityCliStatus(true, state.Version, executablePath)
-                : new UnityCliStatus(false, null, null);
+            // Check official Unity installer location (%LOCALAPPDATA%\Unity\bin\unity.exe)
+            var officialExecutablePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Unity",
+                "bin",
+                "unity.exe");
+            if (File.Exists(officialExecutablePath))
+            {
+                var probedVersion = ProbeExecutableVersion(officialExecutablePath) ?? "1.0.0";
+                return new UnityCliStatus(true, probedVersion, officialExecutablePath);
+            }
+
+            // Check system / user PATH
+            var pathExecutable = FindExecutableInPath("unity.exe");
+            if (!string.IsNullOrWhiteSpace(pathExecutable) && File.Exists(pathExecutable))
+            {
+                var probedVersion = ProbeExecutableVersion(pathExecutable) ?? "1.0.0";
+                return new UnityCliStatus(true, probedVersion, pathExecutable);
+            }
+
+            return new UnityCliStatus(false, null, null);
         }
         catch
         {
@@ -83,27 +104,85 @@ public sealed class UnityCliToolService
     public async Task<string?> GetVerifiedExecutablePathAsync(
         CancellationToken cancellationToken = default)
     {
+        var status = GetStatus();
+        if (!status.IsInstalled || string.IsNullOrWhiteSpace(status.ExecutablePath) || !File.Exists(status.ExecutablePath))
+        {
+            return null;
+        }
+
         var state = ReadState();
-        if (state is null || !IsValidVersion(state.Version) || !Sha256Pattern.IsMatch(state.Sha256))
+        if (state is not null && string.Equals(GetVersionExecutablePath(state.Version), status.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+        {
+            var actualHash = await ComputeSha256Async(status.ExecutablePath, cancellationToken);
+            return actualHash.Equals(state.Sha256, StringComparison.OrdinalIgnoreCase)
+                ? status.ExecutablePath
+                : null;
+        }
+
+        return File.Exists(status.ExecutablePath) ? status.ExecutablePath : null;
+    }
+
+    private static string? ProbeExecutableVersion(string executablePath)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = executablePath,
+                Arguments = "--version",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using var process = Process.Start(startInfo);
+            if (process is null) return null;
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(3000);
+            if (!string.IsNullOrWhiteSpace(output) && SafeVersionPattern.IsMatch(output))
+            {
+                return output;
+            }
+
+            var fileVersion = FileVersionInfo.GetVersionInfo(executablePath).ProductVersion;
+            if (!string.IsNullOrWhiteSpace(fileVersion) && !fileVersion.Equals("0.0.0.0", StringComparison.Ordinal))
+            {
+                return fileVersion.Trim();
+            }
+
+            return null;
+        }
+        catch
         {
             return null;
         }
+    }
 
-        var executablePath = GetVersionExecutablePath(state.Version);
-        if (!File.Exists(executablePath))
+    private static string? FindExecutableInPath(string executableName)
+    {
+        try
         {
-            return null;
+            var pathVariable = Environment.GetEnvironmentVariable("PATH");
+            if (string.IsNullOrWhiteSpace(pathVariable)) return null;
+            var directories = pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var dir in directories)
+            {
+                try
+                {
+                    var fullPath = Path.Combine(dir.Trim(), executableName);
+                    if (File.Exists(fullPath)) return Path.GetFullPath(fullPath);
+                }
+                catch { }
+            }
         }
-
-        var actualHash = await ComputeSha256Async(executablePath, cancellationToken);
-        return actualHash.Equals(state.Sha256, StringComparison.OrdinalIgnoreCase)
-            ? executablePath
-            : null;
+        catch { }
+        return null;
     }
 
     public async Task<UnityCliReleaseInfo> GetLatestReleaseAsync(
         CancellationToken cancellationToken = default)
     {
+        NetworkConnectivityService.Current.EnsureCanAttemptInternet();
         using var manifestRequest = new HttpRequestMessage(HttpMethod.Get, ManifestUrl);
         manifestRequest.Headers.CacheControl = new CacheControlHeaderValue
         {
@@ -306,6 +385,7 @@ public sealed class UnityCliToolService
         IProgress<UnityCliDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        NetworkConnectivityService.Current.EnsureCanAttemptInternet();
         ValidateRelease(release);
         Directory.CreateDirectory(ToolRootPath);
 

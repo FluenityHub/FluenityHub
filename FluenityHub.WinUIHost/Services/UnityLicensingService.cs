@@ -21,6 +21,11 @@ public sealed class UnityLicensingService
             return (false, "Unity Licensing Client is not installed.");
         }
 
+        if (!NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            return (false, NetworkConnectivityService.OfflineMessage);
+        }
+
         var arguments = new List<string> { "--activate-ulf" };
         if (!string.IsNullOrWhiteSpace(serial))
         {
@@ -139,7 +144,9 @@ public sealed class UnityLicensingService
                 "Unity Licensing Client was not found. Install Unity Hub or a Unity Editor to manage licenses.");
         }
 
-        if (synchronize)
+        var synchronizationSkippedOffline =
+            synchronize && !NetworkConnectivityService.Current.CanAttemptInternet;
+        if (synchronize && !synchronizationSkippedOffline)
         {
             // Best-effort sync entitlements call.
             // Ignore non-critical warnings (e.g. Floating license server not configured)
@@ -173,7 +180,11 @@ public sealed class UnityLicensingService
             clientPath,
             clientVersion,
             licenses,
-            licenses.Count == 0
+            synchronizationSkippedOffline
+                ? licenses.Count == 0
+                    ? "You're offline. No locally stored Unity licenses were found."
+                    : $"You're offline. Showing {licenses.Count} locally stored Unity license{(licenses.Count == 1 ? string.Empty : "s")}."
+                : licenses.Count == 0
                 ? "No active Unity licenses were found for this Windows user."
                 : $"{licenses.Count} active Unity license{(licenses.Count == 1 ? string.Empty : "s")} found.");
     }

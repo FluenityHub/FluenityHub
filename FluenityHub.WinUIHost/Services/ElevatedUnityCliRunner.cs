@@ -109,6 +109,23 @@ internal static partial class ElevatedUnityCliRunner
 
         try
         {
+            if (IsCurrentProcessElevated())
+            {
+                var exitCode = await RunHelperAsync(requestPath);
+                ReadNewOutput(flushPendingLine: true);
+                if (File.Exists(resultPath))
+                {
+                    var helperResult = JsonSerializer.Deserialize(
+                        await File.ReadAllTextAsync(resultPath, CancellationToken.None),
+                        RuntimeJsonContext.Default.OperationResult);
+                    return helperResult is null
+                        ? new(-1, capturedOutput.ToString(), StartError: "The elevated Unity installer returned an invalid result.")
+                        : new(helperResult.ExitCode, capturedOutput.ToString(), StartError: helperResult.Error);
+                }
+
+                return new(exitCode, capturedOutput.ToString());
+            }
+
             var hostPath = Environment.ProcessPath;
             if (string.IsNullOrWhiteSpace(hostPath) || !File.Exists(hostPath))
             {
@@ -318,12 +335,32 @@ internal static partial class ElevatedUnityCliRunner
 
     private static void ValidateRequest(OperationRequest request)
     {
-        if (request.Arguments.Count < 8
-            || !request.Arguments[0].Equals("install-modules", StringComparison.Ordinal))
+        if (request.Arguments.Count < 2)
         {
-            throw new InvalidDataException("Only Unity module installation is allowed in elevated mode.");
+            throw new InvalidDataException("The elevated command request is incomplete.");
         }
 
+        var command = request.Arguments[0];
+        if (command.Equals("install-modules", StringComparison.Ordinal))
+        {
+            ValidateInstallModulesRequest(request);
+        }
+        else if (command.Equals("install", StringComparison.Ordinal))
+        {
+            ValidateInstallRequest(request);
+        }
+        else if (command.Equals("uninstall", StringComparison.Ordinal))
+        {
+            ValidateUninstallRequest(request);
+        }
+        else
+        {
+            throw new InvalidDataException($"Elevated Unity CLI command '{command}' is not allowed.");
+        }
+    }
+
+    private static void ValidateInstallModulesRequest(OperationRequest request)
+    {
         var hasEditorVersion = false;
         var hasModule = false;
         for (var index = 1; index < request.Arguments.Count; index++)
@@ -362,7 +399,8 @@ internal static partial class ElevatedUnityCliRunner
                     break;
                 case "--format":
                     if (++index >= request.Arguments.Count
-                        || !request.Arguments[index].Equals("ndjson", StringComparison.Ordinal))
+                        || (!request.Arguments[index].Equals("ndjson", StringComparison.Ordinal)
+                            && !request.Arguments[index].Equals("json", StringComparison.Ordinal)))
                     {
                         throw new InvalidDataException("The elevated output format is invalid.");
                     }
@@ -371,6 +409,7 @@ internal static partial class ElevatedUnityCliRunner
                 case "--force":
                 case "--no-childModules":
                 case "--cm":
+                case "--childModules":
                 case "--accept-eula":
                 case "--yes":
                 case "--non-interactive":
@@ -385,6 +424,122 @@ internal static partial class ElevatedUnityCliRunner
         if (!hasEditorVersion || !hasModule)
         {
             throw new InvalidDataException("The elevated Unity module request is incomplete.");
+        }
+    }
+
+    private static void ValidateInstallRequest(OperationRequest request)
+    {
+        if (request.Arguments.Count < 2 || !SafeIdentifier().IsMatch(request.Arguments[1]))
+        {
+            throw new InvalidDataException("The elevated Editor version is invalid.");
+        }
+
+        for (var index = 2; index < request.Arguments.Count; index++)
+        {
+            var argument = request.Arguments[index];
+            switch (argument)
+            {
+                case "--architecture":
+                case "-a":
+                    if (++index >= request.Arguments.Count
+                        || (!request.Arguments[index].Equals("x86_64", StringComparison.OrdinalIgnoreCase)
+                            && !request.Arguments[index].Equals("arm64", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        throw new InvalidDataException("The elevated architecture is invalid.");
+                    }
+                    break;
+                case "--changeset":
+                case "-c":
+                    if (++index >= request.Arguments.Count || !SafeIdentifier().IsMatch(request.Arguments[index]))
+                    {
+                        throw new InvalidDataException("The elevated changeset is invalid.");
+                    }
+                    break;
+                case "--module":
+                case "-m":
+                    while (index + 1 < request.Arguments.Count
+                           && !request.Arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        index++;
+                        if (!SafeIdentifier().IsMatch(request.Arguments[index]))
+                        {
+                            throw new InvalidDataException("An elevated module identifier is invalid.");
+                        }
+                    }
+                    break;
+                case "--retries":
+                    if (++index >= request.Arguments.Count
+                        || !int.TryParse(request.Arguments[index], out var retries)
+                        || retries is < 0 or > 10)
+                    {
+                        throw new InvalidDataException("The elevated retry count is invalid.");
+                    }
+                    break;
+                case "--format":
+                    if (++index >= request.Arguments.Count
+                        || (!request.Arguments[index].Equals("ndjson", StringComparison.Ordinal)
+                            && !request.Arguments[index].Equals("json", StringComparison.Ordinal)))
+                    {
+                        throw new InvalidDataException("The elevated output format is invalid.");
+                    }
+                    break;
+                case "--resume":
+                case "--force":
+                case "-f":
+                case "--no-childModules":
+                case "--cm":
+                case "--childModules":
+                case "--accept-eula":
+                case "--yes":
+                case "-y":
+                case "--non-interactive":
+                case "--no-banner":
+                case "--verbose":
+                    break;
+                default:
+                    throw new InvalidDataException($"Elevated Unity CLI option '{argument}' is not allowed.");
+            }
+        }
+    }
+
+    private static void ValidateUninstallRequest(OperationRequest request)
+    {
+        if (request.Arguments.Count < 2 || !SafeIdentifier().IsMatch(request.Arguments[1]))
+        {
+            throw new InvalidDataException("The elevated Editor version is invalid.");
+        }
+
+        for (var index = 2; index < request.Arguments.Count; index++)
+        {
+            var argument = request.Arguments[index];
+            switch (argument)
+            {
+                case "--architecture":
+                case "-a":
+                    if (++index >= request.Arguments.Count
+                        || (!request.Arguments[index].Equals("x86_64", StringComparison.OrdinalIgnoreCase)
+                            && !request.Arguments[index].Equals("arm64", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        throw new InvalidDataException("The elevated architecture is invalid.");
+                    }
+                    break;
+                case "--format":
+                    if (++index >= request.Arguments.Count
+                        || (!request.Arguments[index].Equals("ndjson", StringComparison.Ordinal)
+                            && !request.Arguments[index].Equals("json", StringComparison.Ordinal)))
+                    {
+                        throw new InvalidDataException("The elevated output format is invalid.");
+                    }
+                    break;
+                case "--yes":
+                case "-y":
+                case "--non-interactive":
+                case "--no-banner":
+                case "--verbose":
+                    break;
+                default:
+                    throw new InvalidDataException($"Elevated Unity CLI option '{argument}' is not allowed.");
+            }
         }
     }
 
@@ -420,6 +575,20 @@ internal static partial class ElevatedUnityCliRunner
         }
     }
 
+    public static bool IsCurrentProcessElevated()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        var principal = new System.Security.Principal.WindowsPrincipal(identity);
+        return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+    }
+
     [GeneratedRegex("^[0-9A-Za-z][0-9A-Za-z.+_-]{0,127}$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeIdentifier();
 }
+
+

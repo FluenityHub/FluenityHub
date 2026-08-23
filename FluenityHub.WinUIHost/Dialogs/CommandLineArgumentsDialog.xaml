@@ -41,7 +41,7 @@
                     Content="Quick Presets">
                     <DropDownButton.Flyout>
                         <MenuFlyout x:Name="PresetsMenuFlyout">
-                            <MenuFlyoutItem Click="OnPresetClick" Tag="" Text="Default (Clear args)" />
+                            <MenuFlyoutItem Click="OnPresetClick" Tag="CLEAR" Text="Default (Clear args)" />
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem Click="OnPresetClick" Tag="-ignorecompilererrors" Text="Safe Mode (-ignorecompilererrors)" />
                             <MenuFlyoutItem Click="OnPresetClick" Tag="-force-vulkan" Text="Vulkan Mode (-force-vulkan)" />
@@ -66,11 +66,7 @@
             Padding="0"
             HorizontalAlignment="Left"
             AutomationProperties.Name="Command line arguments documentation"
-            Click="OnDocLinkClick">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="Command line arguments documentation" />
-                <FontIcon FontSize="12" Glyph="&#xE8A7;" />
-            </StackPanel>
-        </HyperlinkButton>
+            Click="OnDocLinkClick"
+            Content="Command line arguments documentation" />
     </StackPanel>
 </ContentDialog>
