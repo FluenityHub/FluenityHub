@@ -216,14 +216,13 @@ public sealed class UnityCliAuthService
             return new(true, false, string.Empty, string.Empty, string.Empty, "Not signed in");
         }
 
-        var message = !string.IsNullOrWhiteSpace(cleanError)
-            ? cleanError.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
-            : !string.IsNullOrWhiteSpace(cleanOutput)
-                ? cleanOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
-                : "Not signed in";
+        var message = GetFirstUserFacingOutputLine(cleanError)
+            ?? GetFirstUserFacingOutputLine(cleanOutput)
+            ?? (command == "login"
+                ? "Unity sign-in was not completed. Finish the browser sign-in and try again."
+                : "Not signed in");
 
-        return new(true, false, string.Empty, string.Empty, string.Empty, message ?? "Not signed in");
-    }
+        return new(true, false, string.Empty, string.Empty, string.Empty, message);    }
 
     private static bool TryParseJsonResult(
         string command,
@@ -295,10 +294,43 @@ public sealed class UnityCliAuthService
         }
     }
 
+    private static string? GetFirstUserFacingOutputLine(string output)
+    {
+        foreach (var line in output.Split(
+                     ['\r', '\n'],
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (IsProgressRecord(line) || line.StartsWith("{", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return line;
+        }
+
+        return null;
+    }
+
+    private static bool IsProgressRecord(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return string.Equals(
+                ReadString(document.RootElement, "type"),
+                "progress",
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
     private static bool IsUsefulFailure(string message)
         => !string.IsNullOrWhiteSpace(message)
            && !message.Equals("Not signed in", StringComparison.OrdinalIgnoreCase)
-           && !message.StartsWith("Signed ", StringComparison.OrdinalIgnoreCase);
+           && !message.StartsWith("Signed ", StringComparison.OrdinalIgnoreCase)
+           && !IsProgressRecord(message);
 
     private async Task<UnityCliAuthState> GetStatusAfterAuthAsync(
         string executablePath,
