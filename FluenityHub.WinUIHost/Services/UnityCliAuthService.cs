@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using FluenityHub_WinUIHost.Models;
 
@@ -147,26 +148,59 @@ public sealed class UnityCliAuthService
         startInfo.ArgumentList.Add(command);
 
         using var process = new Process { StartInfo = startInfo };
+        var standardOutputBuilder = new StringBuilder();
+        var standardErrorBuilder = new StringBuilder();
+        var outputSync = new object();
+        process.OutputDataReceived += (_, eventArgs) =>
+        {
+            if (eventArgs.Data is not null)
+            {
+                lock (outputSync)
+                {
+                    standardOutputBuilder.AppendLine(eventArgs.Data);
+                }
+            }
+        };
+        process.ErrorDataReceived += (_, eventArgs) =>
+        {
+            if (eventArgs.Data is not null)
+            {
+                lock (outputSync)
+                {
+                    standardErrorBuilder.AppendLine(eventArgs.Data);
+                }
+            }
+        };
+
         if (!process.Start())
         {
             return new(true, false, string.Empty, string.Empty, string.Empty,
                 "Unity CLI could not be started.");
         }
 
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(timeoutDuration);
         try
         {
-            var standardOutput = process.StandardOutput.ReadToEndAsync(timeout.Token);
-            var standardError = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
-            var output = await standardOutput;
-            var error = await standardError;
-            return ParseResult(command, process.ExitCode, output, error);
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            TryCancelOutputRead(process);
+
+            lock (outputSync)
+            {
+                return ParseResult(
+                    command,
+                    process.ExitCode,
+                    standardOutputBuilder.ToString(),
+                    standardErrorBuilder.ToString());
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             TryTerminate(process);
+            TryCancelOutputRead(process);
             return new(true, false, string.Empty, string.Empty, string.Empty,
                 command == "login"
                     ? "Unity sign-in timed out. You can try again safely."
@@ -175,10 +209,10 @@ public sealed class UnityCliAuthService
         catch
         {
             TryTerminate(process);
+            TryCancelOutputRead(process);
             throw;
         }
     }
-
     private static UnityCliAuthState ParseResult(string command, int exitCode, string output, string error)
     {
         var cleanOutput = output.Trim();
@@ -405,6 +439,24 @@ public sealed class UnityCliAuthService
         => element.TryGetProperty(name, out var value)
            && value.ValueKind == JsonValueKind.True;
 
+    private static void TryCancelOutputRead(Process process)
+    {
+        try
+        {
+            process.CancelOutputRead();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        try
+        {
+            process.CancelErrorRead();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
     private static void TryTerminate(Process process)
     {
         try

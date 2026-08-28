@@ -11,17 +11,34 @@ public sealed partial class LicensesPage : Page
     private readonly UnityLicensingService _licensingService = new();
     private readonly UnityCliAuthService _unityCliAuthService = new();
     private readonly UnityLogoutSecurityService _unityLogoutSecurityService = new();
+    private readonly AppSettingsStore _settingsStore = new();
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _accountCancellation;
     private bool _isUnityCliAvailable;
     private bool _isPublishingAccountState;
+    private bool _isInitializingOfflineLaunchSetting;
 
     public LicensesPage()
     {
         InitializeComponent();
+        _isInitializingOfflineLaunchSetting = true;
+        LaunchEditorInOfflineModeToggleSwitch.IsOn = _settingsStore.Load().LaunchEditorInOfflineMode;
+        _isInitializingOfflineLaunchSetting = false;
         SettingsBreadcrumbBar.ItemsSource = new[] { "Settings", "Unity licenses" };
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
+    }
+
+    private void OnLaunchEditorInOfflineModeToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializingOfflineLaunchSetting)
+        {
+            return;
+        }
+
+        var settings = _settingsStore.Load();
+        settings.LaunchEditorInOfflineMode = LaunchEditorInOfflineModeToggleSwitch.IsOn;
+        _settingsStore.Save(settings);
     }
 
     private void OnSettingsBreadcrumbItemClicked(

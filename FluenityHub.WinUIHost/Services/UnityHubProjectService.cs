@@ -69,7 +69,29 @@ public sealed class UnityHubProjectService
     {
         var hasDatabaseProjects = TryReadProjectsFromDatabase(out var databaseProjects);
         List<StoredProject> storedProjects;
-        if (File.Exists(ProjectsJsonPath))
+        if (hasDatabaseProjects)
+        {
+            var mirroredProjects = new Dictionary<string, StoredProject>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(ProjectsJsonPath))
+            {
+                if (repairProjectsFile)
+                {
+                    RepairProjectsJson();
+                }
+
+                foreach (var mirroredProject in ReadProjectsFromJson())
+                {
+                    mirroredProjects[mirroredProject.Path] = mirroredProject;
+                }
+            }
+
+            // SQLite owns list membership. The JSON row remains an overlay for
+            // FluenityHub-specific metadata until those fields are migrated.
+            storedProjects = databaseProjects
+                .Select(project => mirroredProjects.GetValueOrDefault(project.Path, project))
+                .ToList();
+        }
+        else if (File.Exists(ProjectsJsonPath))
         {
             if (repairProjectsFile)
             {
@@ -77,10 +99,6 @@ public sealed class UnityHubProjectService
             }
 
             storedProjects = ReadProjectsFromJson();
-        }
-        else if (hasDatabaseProjects)
-        {
-            storedProjects = databaseProjects;
         }
         else
         {
@@ -205,7 +223,7 @@ public sealed class UnityHubProjectService
             var tagsArray = new JsonArray();
             foreach (var tag in normalizedTags)
             {
-                tagsArray.Add(tag);
+                tagsArray.Add((JsonNode)JsonValue.Create(tag)!);
             }
 
             projectObject["tags"] = tagsArray;
@@ -345,7 +363,7 @@ public sealed class UnityHubProjectService
                 var tagsArray = new JsonArray();
                 foreach (var tag in normalizedTags)
                 {
-                    tagsArray.Add(tag);
+                    tagsArray.Add((JsonNode)JsonValue.Create(tag)!);
                 }
 
                 projectObject["tags"] = tagsArray;
@@ -389,6 +407,164 @@ public sealed class UnityHubProjectService
         catch (JsonException)
         {
             return false;
+        }
+    }
+
+    private static bool? TryAddOrUpdateProjectInDatabase(
+        string projectPath,
+        string title,
+        string version,
+        bool isFavorite,
+        bool? hasCustomDisplayName,
+        string? buildTarget)
+    {
+        if (!File.Exists(HubDatabasePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var connection = OpenHubDatabase(SqliteOpenMode.ReadWrite);
+            if (!HasProjectsTable(connection)
+                || (!HasProjectsMigrationMarker(connection) && !HasAnyProjects(connection)))
+            {
+                return null;
+            }
+
+            ExecuteNonQuery(connection, "BEGIN IMMEDIATE");
+            try
+            {
+                using var readCommand = connection.CreateCommand();
+                readCommand.CommandText = "SELECT data FROM projects WHERE path = $path";
+                readCommand.Parameters.AddWithValue("$path", projectPath);
+                var storedData = readCommand.ExecuteScalar() as string;
+                var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                JsonObject projectObject;
+
+                if (storedData is not null)
+                {
+                    projectObject = JsonNode.Parse(storedData)?.AsObject()
+                        ?? throw new JsonException("The stored Unity Hub project entry is invalid.");
+                    projectObject["title"] = title;
+                    projectObject["version"] = version;
+                    projectObject["isFavorite"] = isFavorite;
+                    if (!string.IsNullOrWhiteSpace(buildTarget))
+                    {
+                        projectObject["buildTarget"] = buildTarget;
+                    }
+                    if (hasCustomDisplayName.HasValue)
+                    {
+                        projectObject["hasCustomDisplayName"] = hasCustomDisplayName.Value;
+                    }
+
+                    projectObject["path"] ??= projectPath;
+                    projectObject["containingFolderPath"] ??= Path.GetDirectoryName(projectPath) ?? string.Empty;
+                    projectObject["lastModified"] ??= lastModified;
+                }
+                else
+                {
+                    projectObject = new JsonObject
+                    {
+                        ["title"] = title,
+                        ["path"] = projectPath,
+                        ["containingFolderPath"] = Path.GetDirectoryName(projectPath) ?? string.Empty,
+                        ["version"] = version,
+                        ["lastModified"] = lastModified,
+                        ["isFavorite"] = isFavorite,
+                        ["isCustomEditor"] = false,
+                        ["hasCustomDisplayName"] = hasCustomDisplayName ?? false
+                    };
+                    if (!string.IsNullOrWhiteSpace(buildTarget))
+                    {
+                        projectObject["buildTarget"] = buildTarget;
+                    }
+                }
+
+                using var upsertCommand = connection.CreateCommand();
+                upsertCommand.CommandText = """
+                    INSERT INTO projects (path, data, updated_at)
+                    VALUES ($path, $data, $updatedAt)
+                    ON CONFLICT(path) DO UPDATE SET
+                        data = excluded.data,
+                        updated_at = excluded.updated_at
+                    """;
+                upsertCommand.Parameters.AddWithValue("$path", projectPath);
+                upsertCommand.Parameters.AddWithValue(
+                    "$data",
+                    projectObject.ToJsonString(AppJsonContext.Default.Options));
+                upsertCommand.Parameters.AddWithValue("$updatedAt", lastModified);
+                upsertCommand.ExecuteNonQuery();
+                ExecuteNonQuery(connection, "COMMIT");
+                return true;
+            }
+            catch
+            {
+                TryRollback(connection);
+                throw;
+            }
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static bool? TryRemoveProjectFromDatabase(string projectPath)
+    {
+        if (!File.Exists(HubDatabasePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var connection = OpenHubDatabase(SqliteOpenMode.ReadWrite);
+            if (!HasProjectsTable(connection)
+                || (!HasProjectsMigrationMarker(connection) && !HasAnyProjects(connection)))
+            {
+                return null;
+            }
+
+            ExecuteNonQuery(connection, "BEGIN IMMEDIATE");
+            try
+            {
+                using var deleteCommand = connection.CreateCommand();
+                deleteCommand.CommandText = "DELETE FROM projects WHERE path = $path";
+                deleteCommand.Parameters.AddWithValue("$path", projectPath);
+                deleteCommand.ExecuteNonQuery();
+                ExecuteNonQuery(connection, "COMMIT");
+                return true;
+            }
+            catch
+            {
+                TryRollback(connection);
+                throw;
+            }
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryRollback(SqliteConnection connection)
+    {
+        try
+        {
+            ExecuteNonQuery(connection, "ROLLBACK");
+        }
+        catch
+        {
+            // Preserve the original database failure.
         }
     }
 
@@ -565,6 +741,21 @@ public sealed class UnityHubProjectService
         bool? hasCustomDisplayName = null,
         string? buildTarget = null)
     {
+        var databaseResult = TryAddOrUpdateProjectInDatabase(
+            projectPath,
+            title,
+            version,
+            isFavorite,
+            hasCustomDisplayName,
+            buildTarget);
+        if (databaseResult.HasValue)
+        {
+            if (!databaseResult.Value)
+            {
+                throw new IOException("Unity Hub's project database could not be updated. Try again after Unity Hub finishes its current operation.");
+            }
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectsJsonPath)!);
 
         JsonObject rootNode;
@@ -766,6 +957,15 @@ public sealed class UnityHubProjectService
 
     public void RemoveProject(string projectPath)
     {
+        var databaseResult = TryRemoveProjectFromDatabase(projectPath);
+        if (databaseResult.HasValue)
+        {
+            if (!databaseResult.Value)
+            {
+                throw new IOException("Unity Hub's project database could not be updated. Try again after Unity Hub finishes its current operation.");
+            }
+        }
+
         if (!File.Exists(ProjectsJsonPath))
         {
             return;

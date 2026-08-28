@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using FluenityHub_WinUIHost.Helpers;
 using FluenityHub_WinUIHost.Models;
 
 namespace FluenityHub_WinUIHost.Services;
@@ -19,6 +22,7 @@ public sealed class UnityEditorLaunchService
     private static readonly TimeSpan TokenRefreshWindow = TimeSpan.FromMinutes(5);
     private readonly AppSettingsStore _settingsStore = new();
     private readonly UnityCliAuthService _cliAuthService = new();
+    private readonly UnityCliToolService _cliToolService = new();
 
     public async Task<UnityEditorLaunchResult> LaunchBlankEditorAsync(
         UnityEditorInfo editor,
@@ -70,76 +74,75 @@ public sealed class UnityEditorLaunchService
             UnityEditorLaunchDiagnostics.Write("Launch", "Rejected: project directory was not found.");
             return new(false, $"Project path not found: {projectPath}");
         }
-
-        // Best-effort token acquisition:
-        // 1. If an active, non-expired token is present, use it.
-        // 2. If token is near expiration and we can reach internet, attempt silent OAuth refresh.
-        // 3. If no token, expired, or offline, do NOT force browser login — launch immediately in offline mode.
+        var settings = _settingsStore.Load();
         UnitySharedAccessToken? sharedToken = null;
-        if (UnitySharedAuthService.TryGetActiveAccessToken(out var candidateToken, out _)
-            && candidateToken is not null)
-        {
-            if (TryGetTokenExpiration(candidateToken, out var tokenExpiration)
-                && tokenExpiration > DateTimeOffset.UtcNow + TokenRefreshWindow)
-            {
-                sharedToken = candidateToken;
-                UnityEditorLaunchDiagnostics.Write(
-                    "Auth",
-                    candidateToken.Expiration is double expiration
-                        ? $"Active account loaded; token expiry={DateTimeOffset.FromUnixTimeMilliseconds((long)expiration):O}."
-                        : "Active account loaded; token expiry was not provided.");
-            }
-            else if (NetworkConnectivityService.Current.CanAttemptInternet)
-            {
-                UnityEditorLaunchDiagnostics.Write(
-                    "Auth",
-                    "Access token is expired or nearing expiry; attempting background OAuth refresh.");
-
-                try
-                {
-                    var (refreshedToken, refreshError) = await WaitForSharedAccessTokenAsync(cancellationToken);
-                    if (refreshedToken is not null
-                        && TryGetTokenExpiration(refreshedToken, out var refreshedExp)
-                        && refreshedExp > DateTimeOffset.UtcNow)
-                    {
-                        sharedToken = refreshedToken;
-                        UnityEditorLaunchDiagnostics.Write("Auth", "Unity OAuth refreshed the access token.");
-                    }
-                    else if (!string.IsNullOrWhiteSpace(refreshError))
-                    {
-                        UnityEditorLaunchDiagnostics.Write("Auth", $"OAuth refresh result: {refreshError}");
-                    }
-                }
-                catch
-                {
-                    // Best-effort refresh failure should never block launching the project.
-                }
-            }
-        }
-        else if (NetworkConnectivityService.Current.CanAttemptInternet)
-        {
-            try
-            {
-                var (refreshedToken, _) = await WaitForSharedAccessTokenAsync(cancellationToken);
-                if (refreshedToken is not null)
-                {
-                    sharedToken = refreshedToken;
-                    UnityEditorLaunchDiagnostics.Write("Auth", "Unity OAuth refreshed the access token from stored credentials.");
-                }
-            }
-            catch
-            {
-                // Best-effort refresh failure should never block launching the project.
-            }
-        }
-
-        if (sharedToken is null)
+        if (settings.LaunchEditorInOfflineMode)
         {
             UnityEditorLaunchDiagnostics.Write(
                 "Auth",
-                "No active online session; launching Editor in offline mode.");
+                "Offline Editor mode is enabled in Unity license settings; the active account will not be passed to the Editor.");
+        }
+        else if (UnitySharedAuthService.TryGetActiveAccessToken(out var candidateToken, out _)
+            && candidateToken is not null
+            && TryGetTokenExpiration(candidateToken, out var tokenExpiration)
+            && tokenExpiration > DateTimeOffset.UtcNow + TokenRefreshWindow)
+        {
+            sharedToken = candidateToken;
+            UnityEditorLaunchDiagnostics.Write(
+                "Auth",
+                candidateToken.Expiration is double expiration
+                    ? $"Active account loaded; token expiry={DateTimeOffset.FromUnixTimeMilliseconds((long)expiration):O}."
+                    : "Active account loaded; token expiry was not provided.");
+        }
+        else if (NetworkConnectivityService.Current.CanAttemptInternet)
+        {
+            UnityEditorLaunchDiagnostics.Write(
+                "Auth",
+                "Unity account session is missing or expired; renewing it through Unity CLI before launch.");
+
+            var (refreshedToken, refreshError) = await EnsureSharedAccessTokenAsync(cancellationToken);
+            if (refreshedToken is null)
+            {
+                UnityEditorLaunchDiagnostics.Write("Auth", $"Sign-in failed: {refreshError}");
+                return new(
+                    false,
+                    string.IsNullOrWhiteSpace(refreshError)
+                        ? "Unity sign-in was not completed. Sign in from FluenityHub and retry."
+                        : refreshError);
+            }
+
+            sharedToken = refreshedToken;
+            UnityEditorLaunchDiagnostics.Write("Auth", "Unity account session is ready.");
+        }
+        else
+        {
+            UnityEditorLaunchDiagnostics.Write(
+                "Auth",
+                "No active account session and Windows is offline; launch rejected by Unity license settings.");
+            return new(
+                false,
+                "You're offline and Unity is not signed in. Enable 'Launch Editor in offline mode' in Settings > Unity licenses, or connect to the internet and sign in.");
         }
 
+        if (HasEditorLicensingClient(editorExecutable))
+        {
+            var cliLaunchResult = await TryLaunchWithUnityCliAsync(
+                editorExecutable,
+                projectPath,
+                targetPlatform,
+                extraArguments,
+                cancellationToken);
+            if (cliLaunchResult is not null)
+            {
+                return cliLaunchResult;
+            }
+        }
+        else
+        {
+            UnityEditorLaunchDiagnostics.Write(
+                "Launch",
+                "Editor-local licensing client is missing; using the shared licensing-client launch path.");
+        }
         UnityLicensingClientSession? licensingSession = null;
         UnityHubIpcGuard? hubIpcGuard = null;
         Process? editorProcess = null;
@@ -253,6 +256,293 @@ public sealed class UnityEditorLaunchService
         }
     }
 
+    private async Task<UnityEditorLaunchResult?> TryLaunchWithUnityCliAsync(
+        string editorExecutable,
+        string projectPath,
+        string? targetPlatform,
+        string? extraArguments,
+        CancellationToken cancellationToken)
+    {
+        var cliExecutable = await _cliToolService.GetVerifiedExecutablePathAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(cliExecutable) || !File.Exists(cliExecutable))
+        {
+            UnityEditorLaunchDiagnostics.Write(
+                "Launch",
+                "Unity CLI is unavailable; using the direct Editor launch fallback.");
+            return null;
+        }
+
+        var normalizedEditorPath = Path.GetFullPath(editorExecutable);
+        var existingEditorProcessIds = GetEditorProcessIds(normalizedEditorPath);
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = cliExecutable,
+            WorkingDirectory = Path.GetDirectoryName(cliExecutable)!,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        startInfo.ArgumentList.Add("--format");
+        startInfo.ArgumentList.Add("json");
+        startInfo.ArgumentList.Add("--non-interactive");
+        startInfo.ArgumentList.Add("open");
+        startInfo.ArgumentList.Add(Path.GetFullPath(projectPath));
+        startInfo.ArgumentList.Add("--editor-path");
+        startInfo.ArgumentList.Add(normalizedEditorPath);
+
+        if (!string.IsNullOrWhiteSpace(targetPlatform))
+        {
+            startInfo.ArgumentList.Add("--build-target");
+            startInfo.ArgumentList.Add(targetPlatform);
+        }
+
+        if (!string.IsNullOrWhiteSpace(extraArguments))
+        {
+            startInfo.ArgumentList.Add("--args");
+            startInfo.ArgumentList.Add(extraArguments);
+        }
+
+        UnityEditorLaunchDiagnostics.Write(
+            "Launch",
+            "Delegating Editor startup and account identity to the official Unity CLI.");
+
+        try
+        {
+            using var cliProcess = new Process { StartInfo = startInfo };
+            if (!cliProcess.Start())
+            {
+                return new(false, "Unity CLI could not be started.");
+            }
+
+            var standardOutputBuilder = new StringBuilder();
+            var standardErrorBuilder = new StringBuilder();
+            var outputSync = new object();
+            cliProcess.OutputDataReceived += (_, eventArgs) =>
+            {
+                if (eventArgs.Data is not null)
+                {
+                    lock (outputSync)
+                    {
+                        standardOutputBuilder.AppendLine(eventArgs.Data);
+                    }
+                }
+            };
+            cliProcess.ErrorDataReceived += (_, eventArgs) =>
+            {
+                if (eventArgs.Data is not null)
+                {
+                    lock (outputSync)
+                    {
+                        standardErrorBuilder.AppendLine(eventArgs.Data);
+                    }
+                }
+            };
+            cliProcess.BeginOutputReadLine();
+            cliProcess.BeginErrorReadLine();
+
+            using var commandTimeout =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            commandTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+            try
+            {
+                await cliProcess.WaitForExitAsync(commandTimeout.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                TryTerminate(cliProcess);
+                return new(false, "Unity CLI took too long to open the project.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            TryCancelOutputRead(cliProcess);
+
+            string standardOutput;
+            string standardError;
+            lock (outputSync)
+            {
+                standardOutput = standardOutputBuilder.ToString();
+                standardError = standardErrorBuilder.ToString();
+            }
+
+            if (cliProcess.ExitCode != 0)
+            {
+                var message = GetUnityCliErrorMessage(standardOutput, standardError);
+                UnityEditorLaunchDiagnostics.Write(
+                    "Launch",
+                    $"Unity CLI open failed; code={cliProcess.ExitCode}; message={message}");
+                return new(false, message);
+            }
+
+            var editorProcess = await WaitForNewEditorProcessAsync(
+                normalizedEditorPath,
+                existingEditorProcessIds,
+                cancellationToken);
+            if (editorProcess is null)
+            {
+                UnityEditorLaunchDiagnostics.Write(
+                    "Launch",
+                    "Unity CLI exited successfully, but no Editor process appeared; using the direct launch fallback.");
+                return null;
+            }
+
+            UnityEditorLaunchDiagnostics.Write(
+                "Launch",
+                $"Unity CLI started Editor pid={editorProcess.Id}.");
+            return new(
+                true,
+                "Unity Editor is starting with the persistent Unity CLI account.",
+                editorProcess);
+        }
+        catch (OperationCanceledException)
+        {
+            return new(false, "Opening the Unity project was canceled.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or Win32Exception)
+        {
+            UnityEditorLaunchDiagnostics.Write(
+                "Launch",
+                $"Unity CLI open failed: {ex.GetType().Name}: {ex.Message}");
+            return new(false, $"Unable to open Unity Editor through Unity CLI: {ex.Message}");
+        }
+    }
+
+    private static void TryCancelOutputRead(Process process)
+    {
+        try
+        {
+            process.CancelOutputRead();
+        }
+        catch (InvalidOperationException)
+        {
+            // The parent command may have already closed its output stream.
+        }
+
+        try
+        {
+            process.CancelErrorRead();
+        }
+        catch (InvalidOperationException)
+        {
+            // The parent command may have already closed its error stream.
+        }
+    }
+    private static bool HasEditorLicensingClient(string editorExecutable)
+    {
+        var editorDirectory = Path.GetDirectoryName(Path.GetFullPath(editorExecutable));
+        return editorDirectory is not null
+            && File.Exists(Path.Combine(
+                editorDirectory,
+                "Data",
+                "Resources",
+                "Licensing",
+                "Client",
+                "Unity.Licensing.Client.exe"));
+    }
+    private static HashSet<int> GetEditorProcessIds(string editorExecutable)
+    {
+        var processIds = new HashSet<int>();
+        foreach (var process in Process.GetProcessesByName("Unity"))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (string.Equals(
+                        process.MainModule?.FileName,
+                        editorExecutable,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        processIds.Add(process.Id);
+                    }
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                {
+                    // Processes that are exiting or inaccessible are not launch candidates.
+                }
+            }
+        }
+
+        return processIds;
+    }
+
+    private static async Task<Process?> WaitForNewEditorProcessAsync(
+        string editorExecutable,
+        HashSet<int> existingProcessIds,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            foreach (var process in Process.GetProcessesByName("Unity"))
+            {
+                try
+                {
+                    if (!existingProcessIds.Contains(process.Id)
+                        && string.Equals(
+                            process.MainModule?.FileName,
+                            editorExecutable,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        return process;
+                    }
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                {
+                    // The process may have exited between enumeration and inspection.
+                }
+
+                process.Dispose();
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
+
+        return null;
+    }
+
+    private static string GetUnityCliErrorMessage(string standardOutput, string standardError)
+    {
+        foreach (var source in new[] { standardError, standardOutput })
+        {
+            var start = source.IndexOf('{');
+            var end = source.LastIndexOf('}');
+            if (start < 0 || end <= start)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(source[start..(end + 1)]);
+                if (document.RootElement.TryGetProperty("errors", out var errors)
+                    && errors.ValueKind == JsonValueKind.Array
+                    && errors.GetArrayLength() > 0
+                    && errors[0].TryGetProperty("message", out var message)
+                    && message.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(message.GetString()))
+                {
+                    return SensitiveDataRedactor.Redact(message.GetString()!);
+                }
+            }
+            catch (JsonException)
+            {
+                // Fall back to a safe non-JSON line below.
+            }
+        }
+
+        var fallback = new[] { standardError, standardOutput }
+            .SelectMany(value => value.Split(
+                new[] { '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .FirstOrDefault(line =>
+                !line.StartsWith("Warning:", StringComparison.OrdinalIgnoreCase)
+                && !line.StartsWith('{')
+                && !line.StartsWith('}'));
+
+        return string.IsNullOrWhiteSpace(fallback)
+            ? "Unity CLI could not open the project."
+            : SensitiveDataRedactor.Redact(fallback);
+    }
     public static string GetSandboxDirectory(string editorVersion)
     {
         return Path.Combine(
@@ -262,25 +552,46 @@ public sealed class UnityEditorLaunchService
             $"Unity_{editorVersion}");
     }
 
-    private static async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
-        WaitForSharedAccessTokenAsync(CancellationToken cancellationToken)
+    private async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
+        EnsureSharedAccessTokenAsync(CancellationToken cancellationToken)
     {
-        // First, attempt silent background OAuth token refresh
-        var (refreshedToken, refreshError) = await UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken);
-        if (refreshedToken is not null)
+        var (refreshedToken, refreshError) =
+            await UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken);
+        if (refreshedToken is not null && UnitySharedAuthService.IsAccessTokenUsable(refreshedToken))
         {
             return (refreshedToken, string.Empty);
         }
 
-        const int maximumAttempts = 10;
-        var lastError = !string.IsNullOrWhiteSpace(refreshError)
-            ? refreshError
-            : "The active Unity CLI credential could not be read. Sign in again and retry.";
+        if (UnitySharedAuthService.TryGetActiveAccessToken(out var storedToken, out _)
+            && storedToken is not null
+            && UnitySharedAuthService.IsAccessTokenUsable(storedToken))
+        {
+            return (storedToken, string.Empty);
+        }
+
+        UnityEditorLaunchDiagnostics.Write(
+            "Auth",
+            "Silent renewal was unavailable; starting Unity CLI browser sign-in.");
+        var authState = await _cliAuthService.LoginAsync(cancellationToken);
+        if (!authState.IsLoggedIn)
+        {
+            return (
+                null,
+                string.IsNullOrWhiteSpace(authState.Message)
+                    ? refreshError
+                    : authState.Message);
+        }
+
+        const int maximumAttempts = 25;
+        var lastError = string.IsNullOrWhiteSpace(refreshError)
+            ? "Unity sign-in completed, but its credential was not synchronized. Retry sign-in."
+            : refreshError;
 
         for (var attempt = 0; attempt < maximumAttempts; attempt++)
         {
             if (UnitySharedAuthService.TryGetActiveAccessToken(out var token, out var errorMessage)
-                && token is not null)
+                && token is not null
+                && UnitySharedAuthService.IsAccessTokenUsable(token))
             {
                 return (token, string.Empty);
             }
@@ -298,7 +609,6 @@ public sealed class UnityEditorLaunchService
 
         return (null, lastError);
     }
-
     private static IReadOnlyList<string> SplitCommandLine(string? commandLine)
     {
         if (string.IsNullOrWhiteSpace(commandLine))

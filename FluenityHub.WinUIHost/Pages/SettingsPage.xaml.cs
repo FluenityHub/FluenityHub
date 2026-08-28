@@ -174,7 +174,7 @@ public sealed partial class SettingsPage : Page
             SaveSettings();
             ShowStatus(
                 enabled
-                    ? "File Explorer integration enabled."
+                    ? "File Explorer integration enabled. The command appears after the app identity package is registered."
                     : "File Explorer integration disabled.",
                 InfoBarSeverity.Success);
         }

@@ -27,16 +27,10 @@ internal sealed class UnityLicensingClientSession : IDisposable
         string? accessToken,
         CancellationToken cancellationToken)
     {
-        var licensingClientPath = Path.Combine(
-            Path.GetDirectoryName(editorExecutable) ?? string.Empty,
-            "Data",
-            "Resources",
-            "Licensing",
-            "Client",
-            "Unity.Licensing.Client.exe");
-        if (!File.Exists(licensingClientPath))
+        var licensingClientPath = FindLicensingClient(editorExecutable);
+        if (licensingClientPath is null)
         {
-            return (null, $"Unity Licensing Client was not found for this Editor: {licensingClientPath}");
+            return (null, "Unity Licensing Client was not found. Install or repair Unity Hub, then retry.");
         }
 
         // Unity's SDK tries the user pipe first and falls back to a unique pipe.
@@ -115,6 +109,33 @@ internal sealed class UnityLicensingClientSession : IDisposable
             process?.Dispose();
             return (null, $"Unable to start Unity Licensing Client: {ex.Message}");
         }
+    }
+
+    private static string? FindLicensingClient(string editorExecutable)
+    {
+        var candidates = new[]
+        {
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Unity Hub",
+                "UnityLicensingClient_V1",
+                "Unity.Licensing.Client.exe"),
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Programs",
+                "Unity Hub",
+                "UnityLicensingClient_V1",
+                "Unity.Licensing.Client.exe"),
+            Path.Combine(
+                Path.GetDirectoryName(editorExecutable) ?? string.Empty,
+                "Data",
+                "Resources",
+                "Licensing",
+                "Client",
+                "Unity.Licensing.Client.exe")
+        };
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     public void AttachToEditor(Process editorProcess)

@@ -255,7 +255,7 @@ public sealed class TemplateService
                     var tagsArray = new JsonArray();
                     foreach (var t in validTags)
                     {
-                        tagsArray.Add(t);
+                        tagsArray.Add((JsonNode)JsonValue.Create(t)!);
                     }
                     pkgObj["keywords"] = tagsArray.DeepClone();
                     pkgObj["tags"] = tagsArray;
@@ -291,7 +291,7 @@ public sealed class TemplateService
                         var rootFilesJson = new JsonArray();
                         foreach (var rootFile in copiedRootFiles)
                         {
-                            rootFilesJson.Add(rootFile);
+                            rootFilesJson.Add((JsonNode)JsonValue.Create(rootFile)!);
                         }
 
                         pkgObj["rootFiles"] = rootFilesJson;
@@ -457,7 +457,7 @@ public sealed class TemplateService
                 var tagsArray = new JsonArray();
                 foreach (var t in validTags)
                 {
-                    tagsArray.Add(t);
+                    tagsArray.Add((JsonNode)JsonValue.Create(t)!);
                 }
                 packageObject["keywords"] = tagsArray.DeepClone();
                 packageObject["tags"] = tagsArray;

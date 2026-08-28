@@ -590,6 +590,7 @@
                                 Padding="20,8"
                                 Background="Transparent"
                                 RightTapped="OnItemRightTapped"
+                                AutomationProperties.HelpText="{x:Bind LaunchStatusText, Mode=OneWay}"
                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
                                 <Grid.ContextFlyout>
                                     <MenuFlyout>
@@ -842,6 +843,21 @@
                                             Text="{x:Bind Title, Mode=OneWay}"
                                             TextTrimming="CharacterEllipsis" />
 
+                                        <StackPanel
+                                            VerticalAlignment="Center"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsLaunching), Mode=OneWay}">
+                                            <ProgressRing
+                                                Width="16"
+                                                Height="16"
+                                                IsActive="{x:Bind IsLaunching, Mode=OneWay}" />
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind LaunchStatusText, Mode=OneWay}" />
+                                        </StackPanel>
                                          <!-- Tag Badge -->
                                          <Border
                                              Height="18"

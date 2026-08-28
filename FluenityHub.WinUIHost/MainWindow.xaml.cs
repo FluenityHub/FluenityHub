@@ -32,9 +32,6 @@ public sealed partial class MainWindow : Window
     private bool _isExitingFromTray;
     private readonly DispatcherTimer _priorityMonitorTimer = new();
     private readonly DispatcherTimer _taskbarErrorClearTimer = new();
-    private readonly DispatcherTimer _networkStatusClearTimer = new();
-    private readonly NetworkConnectivityService _networkConnectivityService =
-        NetworkConnectivityService.Current;
     private readonly UnityCliAuthService _unityCliAuthService = new();
     private readonly UnityLogoutSecurityService _unityLogoutSecurityService = new();
     private readonly UnityModuleInstallationManager _moduleInstallationManager =
@@ -80,12 +77,6 @@ public sealed partial class MainWindow : Window
         _taskbarErrorClearTimer.Interval = TimeSpan.FromSeconds(6);
         _taskbarErrorClearTimer.Tick += OnTaskbarErrorClearTimerTick;
         Activated += OnWindowActivatedForTaskbarProgress;
-        Closed += OnMainWindowClosed;
-        _networkConnectivityService.StateChanged += OnNetworkStateChanged;
-        _networkStatusClearTimer.Interval = TimeSpan.FromSeconds(4);
-        _networkStatusClearTimer.Tick += OnNetworkStatusClearTimerTick;
-        UpdateNetworkStatus(_networkConnectivityService.State, showOnlineConfirmation: false);
-
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
@@ -150,68 +141,13 @@ public sealed partial class MainWindow : Window
         _priorityMonitorTimer.Tick += OnPriorityMonitorTimerTick;
         _priorityMonitorTimer.Start();
 
-        // Navigate the root frame to the main page on startup.
         RootFrame.Navigate(typeof(MainPage));
-
-        CheckAppUpdatesOnLaunch();
-    }
-
-    private void OnNetworkStateChanged(object? sender, NetworkStateChangedEventArgs e)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-            UpdateNetworkStatus(
-                e.CurrentState,
-                showOnlineConfirmation: e.PreviousState is
-                    AppNetworkState.Offline or AppNetworkState.Limited));
-    }
-
-    private void UpdateNetworkStatus(
-        AppNetworkState state,
-        bool showOnlineConfirmation)
-    {
-        _networkStatusClearTimer.Stop();
-        switch (state)
+        if (RootFrame.Content is MainPage mainPage)
         {
-            case AppNetworkState.Offline:
-                NetworkStatusInfoBar.Severity = InfoBarSeverity.Warning;
-                NetworkStatusInfoBar.Title = "You're offline";
-                NetworkStatusInfoBar.Message =
-                    "Online features are unavailable. Local projects, Editors, templates, backups, and offline installers still work.";
-                NetworkStatusInfoBar.IsOpen = true;
-                break;
-
-            case AppNetworkState.Limited:
-                NetworkStatusInfoBar.Severity = InfoBarSeverity.Warning;
-                NetworkStatusInfoBar.Title = "Internet access is limited";
-                NetworkStatusInfoBar.Message =
-                    "Some online services may be unavailable. Local features still work.";
-                NetworkStatusInfoBar.IsOpen = true;
-                break;
-
-            case AppNetworkState.Online when showOnlineConfirmation:
-                NetworkStatusInfoBar.Severity = InfoBarSeverity.Success;
-                NetworkStatusInfoBar.Title = "Back online";
-                NetworkStatusInfoBar.Message = "Online features are available again.";
-                NetworkStatusInfoBar.IsOpen = true;
-                _networkStatusClearTimer.Start();
-                break;
-
-            default:
-                NetworkStatusInfoBar.IsOpen = false;
-                break;
+            mainPage.InstallUpdateRequested += OnInstallUpdateRequested;
+            mainPage.SeeChangesRequested += OnSeeChangesRequested;
         }
-    }
-
-    private void OnNetworkStatusClearTimerTick(object? sender, object e)
-    {
-        _networkStatusClearTimer.Stop();
-        NetworkStatusInfoBar.IsOpen = false;
-    }
-
-    private void OnMainWindowClosed(object sender, WindowEventArgs args)
-    {
-        _networkConnectivityService.StateChanged -= OnNetworkStateChanged;
-        _networkStatusClearTimer.Stop();
+        CheckAppUpdatesOnLaunch();
     }
 
     private AppUpdateInfo? _currentUpdateInfo;
@@ -223,15 +159,11 @@ public sealed partial class MainWindow : Window
             var updateInfo = await AppUpdateService.CheckForUpdatesAsync();
             _currentUpdateInfo = updateInfo;
 
-            if (updateInfo.HasUpdate && AppUpdateInfoBar is not null)
+            if (updateInfo.HasUpdate)
             {
                 DispatcherQueue.TryEnqueue(() =>
                 {
-                    AppUpdateInfoBar.Title = $"FluenityHub v{updateInfo.LatestVersion} is available";
-                    AppUpdateInfoBar.Message = string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
-                        ? "A new version of FluenityHub is available with new features and performance improvements."
-                        : updateInfo.ReleaseTitle;
-                    AppUpdateInfoBar.IsOpen = true;
+                    MainPage.Instance?.ShowAppUpdate($"FluenityHub v{updateInfo.LatestVersion} is available", string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle) ? "A new version of FluenityHub is available with new features and performance improvements." : updateInfo.ReleaseTitle);
                 });
             }
         }
@@ -241,18 +173,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnInstallUpdateClick(object sender, RoutedEventArgs e)
+    private void OnInstallUpdateRequested(object? sender, EventArgs e)
     {
-        var targetUrl = _currentUpdateInfo?.DownloadUrl ?? _currentUpdateInfo?.ReleaseUrl ?? "https://github.com/FluenityHub/FluenityHub/releases";
+        var targetUrl = _currentUpdateInfo?.DownloadUrl
+            ?? _currentUpdateInfo?.ReleaseUrl
+            ?? "https://github.com/FluenityHub/FluenityHub/releases";
         OpenExternalUrl(targetUrl);
     }
 
-    private void OnSeeChangesClick(object sender, RoutedEventArgs e)
+    private void OnSeeChangesRequested(object? sender, EventArgs e)
     {
-        var targetUrl = _currentUpdateInfo?.ReleaseUrl ?? "https://github.com/FluenityHub/FluenityHub/releases";
+        var targetUrl = _currentUpdateInfo?.ReleaseUrl
+            ?? "https://github.com/FluenityHub/FluenityHub/releases";
         OpenExternalUrl(targetUrl);
     }
-
     private static void OpenExternalUrl(string url)
     {
         try
@@ -337,6 +271,8 @@ public sealed partial class MainWindow : Window
         AccountMenuHeader.Description = string.IsNullOrWhiteSpace(accountDescription)
             ? (state.IsLoggedIn ? "Signed in" : "Not signed in")
             : accountDescription;
+        AccountMenuHeader.Visibility = state.IsLoggedIn ? Visibility.Visible : Visibility.Collapsed;
+        AccountMenuHeaderSeparator.Visibility = state.IsLoggedIn ? Visibility.Visible : Visibility.Collapsed;
         SwitchUnityAccountMenuItem.Text = state.IsLoggedIn ? "Switch account" : "Sign in";
         SwitchUnityAccountMenuItem.IsEnabled = !_isUnityAccountBusy && state.IsCliAvailable;
         SignOutUnityMenuItem.IsEnabled = !_isUnityAccountBusy && state.IsCliAvailable && state.IsLoggedIn;
@@ -1045,6 +981,8 @@ public sealed partial class MainWindow : Window
         System.Diagnostics.Process? editorProcess = null,
         string? projectPath = null)
     {
+        _ = RefreshUnityAccountStateAsync();
+
         try
         {
             var settings = new AppSettingsStore().Load();

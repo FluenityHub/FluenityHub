@@ -33,6 +33,35 @@
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>
-        <Frame x:Name="ContentFrame" Navigated="OnContentFrameNavigated" />
-    </NavigationView>
+        <NavigationView.Content>
+            <Grid>
+                <Frame x:Name="ContentFrame" Navigated="OnContentFrameNavigated" />
+
+                <StackPanel
+                    Margin="24,12,24,0"
+                    VerticalAlignment="Top"
+                    Canvas.ZIndex="1"
+                    Spacing="8">
+                    <InfoBar
+                        x:Name="AppUpdateInfoBar"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Success"
+                        Title="Update available">
+                        <InfoBar.ActionButton>
+                            <Button
+                                Click="OnInstallUpdateClick"
+                                Content="Update now"
+                                Style="{StaticResource AccentButtonStyle}" />
+                        </InfoBar.ActionButton>
+                        <InfoBar.Content>
+                            <HyperlinkButton
+                                Padding="0"
+                                Click="OnSeeChangesClick"
+                                Content="See changes" />
+                        </InfoBar.Content>
+                    </InfoBar>
+                </StackPanel>
+            </Grid>
+        </NavigationView.Content>    </NavigationView>
 </Page>

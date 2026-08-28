@@ -9,6 +9,7 @@ public sealed class AppSettings
     public bool EnableSourceControl { get; set; } = true;
     public bool ExplorerContextMenuEnabled { get; set; } = false;
     public bool AutoResetSandboxOnClose { get; set; } = false;
+    public bool LaunchEditorInOfflineMode { get; set; } = false;
     public List<string> CustomFavoritePaths { get; set; } = [];
     public List<string> CustomEditorPaths { get; set; } = [];
     public List<string> CustomTemplatePaths { get; set; } = [];

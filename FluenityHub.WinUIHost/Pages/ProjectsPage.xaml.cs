@@ -32,6 +32,7 @@ public sealed partial class ProjectsPage : Page
     private readonly Dictionary<string, string> _installedEditors = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IReadOnlyList<TargetPlatformInfo>> _installedPlatforms = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ProjectListItemViewModel> _projectRows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _launchingProjectPaths = new(StringComparer.OrdinalIgnoreCase);
     private AppSettings _settings = new();
     private object? _hoveredHeaderButton;
     private string _sortCriteria = "LastModified"; // "Name", "LastModified", "EditorVersion", "Platform"
@@ -2592,6 +2593,7 @@ public sealed partial class ProjectsPage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"ConfirmAndRemoveProject failed: {ex}");
+            ShowStatus($"Unable to remove project: {ex.Message}", InfoBarSeverity.Error);
         }
     }
 
@@ -2787,34 +2789,65 @@ public sealed partial class ProjectsPage : Page
         string? targetPlatform = null,
         string? customArgsOverride = null)
     {
-        if (string.IsNullOrWhiteSpace(editorExecutable) || !File.Exists(editorExecutable))
+        if (!_launchingProjectPaths.Add(project.Path))
         {
-            ShowStatus($"Unity {editorVersion} is no longer available at its registered location.", InfoBarSeverity.Error);
             return;
         }
 
-        var extraArgs = customArgsOverride ?? project.CommandLineArguments?.Trim();
-        var result = await _editorLaunchService.LaunchProjectAsync(
-            editorExecutable,
-            project.Path,
-            editorVersion,
-            targetPlatform,
-            extraArgs);
-        if (!result.Succeeded)
+        _projectRows.TryGetValue(project.Path, out var launchRow);
+        if (launchRow is not null)
         {
-            ShowStatus(result.Message, InfoBarSeverity.Error);
-            return;
+            launchRow.IsLaunching = true;
         }
 
-        MainWindow.Instance?.NotifyEditorLaunched(result.EditorProcess, project.Path);
-        if (!string.IsNullOrEmpty(targetPlatform))
+        try
         {
-            ShowStatus(
-                $"Launching Unity ({editorVersion}) for platform '{targetPlatform}'...",
-                InfoBarSeverity.Success);
+            if (string.IsNullOrWhiteSpace(editorExecutable) || !File.Exists(editorExecutable))
+            {
+                ShowStatus($"Unity {editorVersion} is no longer available at its registered location.", InfoBarSeverity.Error);
+                return;
+            }
+
+            var extraArgs = customArgsOverride ?? project.CommandLineArguments?.Trim();
+            var result = await _editorLaunchService.LaunchProjectAsync(
+                editorExecutable,
+                project.Path,
+                editorVersion,
+                targetPlatform,
+                extraArgs);
+            if (!result.Succeeded)
+            {
+                ShowStatus(result.Message, InfoBarSeverity.Error);
+                return;
+            }
+
+            MainWindow.Instance?.NotifyEditorLaunched(result.EditorProcess, project.Path);
+            if (!string.IsNullOrEmpty(targetPlatform))
+            {
+                ShowStatus(
+                    $"Launching Unity ({editorVersion}) for platform '{targetPlatform}'...",
+                    InfoBarSeverity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Unable to open '{project.Title}': {ex.Message}", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _launchingProjectPaths.Remove(project.Path);
+            if (launchRow is not null)
+            {
+                launchRow.IsLaunching = false;
+            }
+
+            if (_projectRows.TryGetValue(project.Path, out var currentRow)
+                && !ReferenceEquals(currentRow, launchRow))
+            {
+                currentRow.IsLaunching = false;
+            }
         }
     }
-
     public async void OpenExternalProjectPath(string projectPath)
     {
         if (string.IsNullOrWhiteSpace(projectPath))

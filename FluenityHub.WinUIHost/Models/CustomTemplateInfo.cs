@@ -146,7 +146,8 @@ public sealed class CustomTemplateInfo
     {
         var image = new BitmapImage
         {
-            CreateOptions = BitmapCreateOptions.IgnoreImageCache
+            CreateOptions = BitmapCreateOptions.IgnoreImageCache,
+            DecodePixelWidth = 640
         };
         image.UriSource = new Uri(imagePath, UriKind.Absolute);
         return image;

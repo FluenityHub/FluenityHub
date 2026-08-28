@@ -98,75 +98,87 @@
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="Unity account" />
 
-            <controls:SettingsCard x:Name="UnityAccountCard">
-                <controls:SettingsCard.Header>
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <PersonPicture
-                            x:Name="UnityAccountPersonPicture"
-                            Width="36"
-                            Height="36"
-                            AutomationProperties.Name="Unity account"
-                            VerticalAlignment="Center" />
-                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                            <TextBlock
-                                x:Name="UnityAccountNameTextBlock"
-                                IsTextSelectionEnabled="True"
-                                SelectionHighlightColor="{ThemeResource TextControlSelectionHighlightColor}"
-                                Style="{StaticResource BodyStrongTextBlockStyle}"
-                                Text="Unity ID" />
-                            <TextBlock
-                                x:Name="UnityAccountEmailTextBlock"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                IsTextSelectionEnabled="True"
-                                SelectionHighlightColor="{ThemeResource TextControlSelectionHighlightColor}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Checking Unity account session..." />
+            <StackPanel Spacing="2">
+                <controls:SettingsCard x:Name="UnityAccountCard">
+                    <controls:SettingsCard.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <PersonPicture
+                                x:Name="UnityAccountPersonPicture"
+                                Width="36"
+                                Height="36"
+                                AutomationProperties.Name="Unity account"
+                                VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock
+                                    x:Name="UnityAccountNameTextBlock"
+                                    IsTextSelectionEnabled="True"
+                                    SelectionHighlightColor="{ThemeResource TextControlSelectionHighlightColor}"
+                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                    Text="Unity ID" />
+                                <TextBlock
+                                    x:Name="UnityAccountEmailTextBlock"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    IsTextSelectionEnabled="True"
+                                    SelectionHighlightColor="{ThemeResource TextControlSelectionHighlightColor}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Checking Unity account session..." />
+                            </StackPanel>
                         </StackPanel>
+                    </controls:SettingsCard.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="UnitySignInButton"
+                            AutomationProperties.Name="Sign in to Unity"
+                            Click="OnUnitySignInClick"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ProgressRing
+                                    x:Name="UnityAccountProgressRing"
+                                    Width="14"
+                                    Height="14"
+                                    IsActive="False"
+                                    Visibility="Collapsed" />
+                                <TextBlock x:Name="UnitySignInButtonText" Text="Sign in" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            x:Name="UnitySignOutButton"
+                            AutomationProperties.Name="Sign out of Unity"
+                            Click="OnUnitySignOutClick"
+                            Content="Sign out"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            Visibility="Collapsed" />
+                        <HyperlinkButton Click="OnManageUnityIdClick" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="Manage account" />
+                                <FontIcon FontSize="11" Glyph="&#xE8A7;" />
+                            </StackPanel>
+                        </HyperlinkButton>
                     </StackPanel>
-                </controls:SettingsCard.Header>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button
-                        x:Name="UnitySignInButton"
-                        AutomationProperties.Name="Sign in to Unity"
-                        Click="OnUnitySignInClick"
-                        Style="{StaticResource AccentButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ProgressRing
-                                x:Name="UnityAccountProgressRing"
-                                Width="14"
-                                Height="14"
-                                IsActive="False"
-                                Visibility="Collapsed" />
-                            <TextBlock x:Name="UnitySignInButtonText" Text="Sign in" />
-                        </StackPanel>
-                    </Button>
-                    <Button
-                        x:Name="UnitySignOutButton"
-                        AutomationProperties.Name="Sign out of Unity"
-                        Click="OnUnitySignOutClick"
-                        Content="Sign out"
-                        Style="{StaticResource SubtleButtonStyle}"
-                        Visibility="Collapsed" />
-                    <HyperlinkButton Click="OnManageUnityIdClick" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="Manage account" />
-                            <FontIcon FontSize="11" Glyph="&#xE8A7;" />
-                        </StackPanel>
-                    </HyperlinkButton>
-                </StackPanel>
-            </controls:SettingsCard>
+                </controls:SettingsCard>
 
-            <controls:SettingsCard
-                x:Name="UnityOrganizationCard"
-                Click="OnManageOrganizationClick"
-                Description="View and manage Unity organizations, projects, and team subscriptions"
-                Header="Unity organization"
-                HeaderIcon="{ui:FontIcon Glyph=&#xE716;}"
-                IsClickEnabled="True">
-                <controls:SettingsCard.ActionIcon>
-                    <FontIcon Glyph="&#xE8A7;" />
-                </controls:SettingsCard.ActionIcon>
-            </controls:SettingsCard>
+                <controls:SettingsCard
+                    Description="Always open Unity Editor in offline mode, even when a Unity account is signed in. Online Unity services will be unavailable."
+                    Header="Launch Editor in offline mode"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xF158;}">
+                    <ToggleSwitch
+                        x:Name="LaunchEditorInOfflineModeToggleSwitch"
+                        AutomationProperties.AutomationId="LaunchEditorInOfflineModeToggleSwitch"
+                        AutomationProperties.Name="Always launch Unity Editor in offline mode"
+                        Toggled="OnLaunchEditorInOfflineModeToggled" />
+                </controls:SettingsCard>
+                <controls:SettingsCard
+                    x:Name="UnityOrganizationCard"
+                    Click="OnManageOrganizationClick"
+                    Description="View and manage Unity organizations, projects, and team subscriptions"
+                    Header="Unity organization"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xE716;}"
+                    IsClickEnabled="True">
+                    <controls:SettingsCard.ActionIcon>
+                        <FontIcon Glyph="&#xE8A7;" />
+                    </controls:SettingsCard.ActionIcon>
+                </controls:SettingsCard>
+            </StackPanel>
 
             <InfoBar
                 x:Name="UnityAccountInfoBar"
@@ -181,6 +193,7 @@
                 Margin="0,8,0,0"
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="On this device" />
+
             <controls:SettingsExpander
                 x:Name="LicenseExpander"
                 Description="Checking license status"

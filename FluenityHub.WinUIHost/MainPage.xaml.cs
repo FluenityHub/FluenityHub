@@ -20,6 +20,20 @@ public sealed partial class MainPage : Page
         AppNavigationView.SelectedItem = FindNavigationItem("projects");
     }
 
+    public event EventHandler? InstallUpdateRequested;
+    public event EventHandler? SeeChangesRequested;
+public void ShowAppUpdate(string title, string message)
+    {
+        AppUpdateInfoBar.Title = title;
+        AppUpdateInfoBar.Message = message;
+        AppUpdateInfoBar.IsOpen = true;
+    }
+
+    private void OnInstallUpdateClick(object sender, RoutedEventArgs e)
+        => InstallUpdateRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnSeeChangesClick(object sender, RoutedEventArgs e)
+        => SeeChangesRequested?.Invoke(this, EventArgs.Empty);
     private void OnNavigationViewSelectionChanged(
         NavigationView sender,
         NavigationViewSelectionChangedEventArgs args)

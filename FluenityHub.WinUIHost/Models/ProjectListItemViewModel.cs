@@ -292,6 +292,25 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
 
     public string EditorStatusLabel => IsEditorInstalled ? "Editor Installed" : "Editor Missing";
 
+    private bool _isLaunching;
+    public bool IsLaunching
+    {
+        get => _isLaunching;
+        set
+        {
+            if (_isLaunching == value)
+            {
+                return;
+            }
+
+            _isLaunching = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LaunchStatusText));
+        }
+    }
+
+    public string LaunchStatusText => IsLaunching ? "Opening..." : string.Empty;
+
     /// <summary>
     /// List of all installed Unity editor version strings for the ComboBox.
     /// </summary>

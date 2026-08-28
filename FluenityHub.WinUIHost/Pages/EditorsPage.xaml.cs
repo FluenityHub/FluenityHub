@@ -43,7 +43,7 @@ public sealed partial class EditorsPage : Page
     public ObservableCollection<UnityModuleInstallationListItem> ModuleOperations { get; } = [];
     private AppSettings _settings = new();
     private bool _hasLoadedEditors;
-    private bool _isReloadingEditors;
+    private Task? _editorReloadTask;
 
     public EditorsPage()
     {
@@ -61,6 +61,10 @@ public sealed partial class EditorsPage : Page
             _hasLoadedEditors = true;
             await ReloadEditorsAsync();
         }
+        else if (_editorReloadTask is { IsCompleted: false } reloadTask)
+        {
+            await reloadTask;
+        }
         else
         {
             ApplyFilterAndSort();
@@ -72,14 +76,19 @@ public sealed partial class EditorsPage : Page
         _moduleInstallationManager.OperationChanged -= OnModuleInstallationChanged;
     }
 
-    private async Task ReloadEditorsAsync()
+    private Task ReloadEditorsAsync()
     {
-        if (_isReloadingEditors)
+        if (_editorReloadTask is { IsCompleted: false })
         {
-            return;
+            return _editorReloadTask;
         }
 
-        _isReloadingEditors = true;
+        _editorReloadTask = ReloadEditorsCoreAsync();
+        return _editorReloadTask;
+    }
+
+    private async Task ReloadEditorsCoreAsync()
+    {
         try
         {
             SetEditorsLoadingState(true);
@@ -110,8 +119,18 @@ public sealed partial class EditorsPage : Page
         finally
         {
             SetEditorsLoadingState(false);
-            _isReloadingEditors = false;
         }
+    }
+
+    private Task EnsureInstalledEditorsLoadedAsync()
+    {
+        if (!_hasLoadedEditors)
+        {
+            _hasLoadedEditors = true;
+            return ReloadEditorsAsync();
+        }
+
+        return _editorReloadTask ?? Task.CompletedTask;
     }
 
     private void SetEditorsLoadingState(bool isLoading)
@@ -443,6 +462,8 @@ public sealed partial class EditorsPage : Page
     {
         try
         {
+            await EnsureInstalledEditorsLoadedAsync();
+
             var xamlRoot = await XamlRootResolver.ResolveAsync(this);
             if (xamlRoot is null)
             {
@@ -496,26 +517,8 @@ public sealed partial class EditorsPage : Page
         }
     }
 
-    public async void TriggerInstallEditorFlow()
-    {
-        try
-        {
-            while (_isReloadingEditors)
-            {
-                await Task.Delay(50);
-            }
-
-            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
-            if (xamlRoot is null) return;
-
-            OnInstallEditorClick(this, new RoutedEventArgs());
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"TriggerInstallEditorFlow failed: {ex}");
-        }
-    }
-
+    public void TriggerInstallEditorFlow()
+        => OnInstallEditorClick(this, new RoutedEventArgs());
     private void OnContextReleaseNotesClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: UnityEditorInfo editor })

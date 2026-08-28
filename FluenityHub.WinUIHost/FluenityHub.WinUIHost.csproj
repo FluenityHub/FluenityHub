@@ -38,8 +38,7 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
+  <ItemGroup>    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
@@ -69,4 +68,22 @@
     <PublishAot Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishAot>
     <PublishAot Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishAot>
   </PropertyGroup>
+  <!-- Modern Windows 11 Explorer command packaging is disabled until the
+       release signing and installer registration path is ready.
+  <PropertyGroup>
+    <ExplorerCommandPlatform Condition="'$(Platform)' == 'ARM64'">ARM64</ExplorerCommandPlatform>
+    <ExplorerCommandPlatform Condition="'$(ExplorerCommandPlatform)' == ''">x64</ExplorerCommandPlatform>
+    <ExplorerCommandProject>$(MSBuildThisFileDirectory)..\Native\FluenityHub.ExplorerCommand\FluenityHub.ExplorerCommand.vcxproj</ExplorerCommandProject>
+    <ExplorerCommandOutput>$(MSBuildThisFileDirectory)..\Native\FluenityHub.ExplorerCommand\$(ExplorerCommandPlatform)\$(Configuration)\FluenityHubExplorerCommand.dll</ExplorerCommandOutput>
+  </PropertyGroup>
+
+  <Target Name="BuildExplorerCommand" BeforeTargets="CopyFilesToOutputDirectory" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="cmd /d /s /c &quot;&quot;$(MSBuildThisFileDirectory)..\Native\BuildExplorerCommand.cmd&quot; $(ExplorerCommandPlatform) $(Configuration)&quot;" />
+    <Copy SourceFiles="$(ExplorerCommandOutput)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyExplorerCommandToPublish" AfterTargets="Publish" DependsOnTargets="BuildExplorerCommand" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Copy SourceFiles="$(ExplorerCommandOutput)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+  -->
 </Project>

@@ -120,8 +120,12 @@
                                 AutomationProperties.Name="Unity account"
                                 Description="Not signed in"
                                 DisplayName="Unity ID"
-                                Style="{StaticResource AccountMenuFlyoutHeaderStyle}" />
-                            <MenuFlyoutSeparator />
+                                Style="{StaticResource AccountMenuFlyoutHeaderStyle}"
+                                Visibility="Collapsed" />
+                            <MenuFlyoutSeparator
+                                x:Name="AccountMenuHeaderSeparator"
+                                Visibility="Collapsed" />
+
                             <MenuFlyoutItem
                                 Click="OnOpenUnityLicensesClick"
                                 Text="Manage Unity licenses">
@@ -156,44 +160,6 @@
                 </Button>
             </TitleBar.RightHeader>
         </TitleBar>
-
-        <StackPanel
-            Grid.Row="1"
-            Margin="16,8,16,0"
-            VerticalAlignment="Top"
-            Canvas.ZIndex="200"
-            Spacing="8">
-            <InfoBar
-                x:Name="NetworkStatusInfoBar"
-                AutomationProperties.Name="Network status"
-                IsClosable="False"
-                IsOpen="False"
-                Severity="Warning" />
-
-            <InfoBar
-                x:Name="AppUpdateInfoBar"
-                IsClosable="True"
-                IsOpen="False"
-                Severity="Success"
-                Title="Update available">
-                <InfoBar.ActionButton>
-                    <Button
-                        x:Name="InstallUpdateBtn"
-                        Click="OnInstallUpdateClick"
-                        Content="Update now"
-                        Style="{StaticResource AccentButtonStyle}" />
-                </InfoBar.ActionButton>
-                <InfoBar.Content>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <HyperlinkButton
-                            x:Name="SeeChangesBtn"
-                            VerticalAlignment="Center"
-                            Click="OnSeeChangesClick"
-                            Content="See changes" />
-                    </StackPanel>
-                </InfoBar.Content>
-            </InfoBar>
-        </StackPanel>
 
         <Frame x:Name="RootFrame" Grid.Row="1" />
     </Grid>

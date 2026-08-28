@@ -130,7 +130,7 @@
                     </controls:SettingsCard>
 
                     <controls:SettingsCard
-                        Description="Adds “Open with FluenityHub” to folder context menus in File Explorer"
+                        Description="Shows Open with FluenityHub in the Windows 11 folder context menu"
                         Header="File Explorer integration"
                         HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}">
                         <ToggleSwitch

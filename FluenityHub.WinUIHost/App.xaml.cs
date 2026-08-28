@@ -13,6 +13,8 @@ public partial class App : Application
 {
     private static Mutex? _appMutex;
     private const string ActivationPipeName = "FluenityHub_Activation_987A";
+    private readonly object _activationSync = new();
+    private readonly Queue<string[]> _pendingExternalActivations = new();
     private Window? _window;
     private readonly bool _isElevatedUnityCliHelper;
     private readonly string? _elevatedUnityCliRequestPath;
@@ -120,9 +122,15 @@ public partial class App : Application
             return;
         }
 
-        _window = new MainWindow();
-        _window.Activate();
+        var window = new MainWindow();
+        lock (_activationSync)
+        {
+            _window = window;
+        }
+
+        window.Activate();
         HandleExternalArguments(Environment.GetCommandLineArgs().Skip(1).ToArray());
+        DrainPendingExternalActivations();
 
         try
         {
@@ -156,14 +164,16 @@ public partial class App : Application
                 PipeDirection.Out,
                 PipeOptions.CurrentUserOnly);
             client.Connect(1500);
-            using var writer = new StreamWriter(client) { AutoFlush = true };
-            writer.WriteLine(JsonSerializer.Serialize(
+
+            var payload = JsonSerializer.Serialize(
                 Environment.GetCommandLineArgs().Skip(1).ToArray(),
-                Models.AppJsonContext.Default.StringArray));
+                Models.AppJsonContext.Default.StringArray);
+            using var writer = new StreamWriter(client);
+            writer.Write(payload);
         }
-        catch
+        catch (Exception ex)
         {
-            // Restoring the existing window remains a safe fallback.
+            System.Diagnostics.Debug.WriteLine($"Activation forwarding failed: {ex.Message}");
         }
     }
 
@@ -181,21 +191,53 @@ public partial class App : Application
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await server.WaitForConnectionAsync();
                 using var reader = new StreamReader(server);
-                var payload = await reader.ReadLineAsync();
+                var payload = await reader.ReadToEndAsync();
                 var arguments = string.IsNullOrWhiteSpace(payload)
                     ? []
                     : JsonSerializer.Deserialize(payload, Models.AppJsonContext.Default.StringArray) ?? [];
 
-                _window?.DispatcherQueue.TryEnqueue(() =>
-                {
-                    MainWindow.Instance?.RestoreWindow();
-                    HandleExternalArguments(arguments);
-                });
+                DispatchExternalActivation(arguments);
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Activation receiver failed: {ex.Message}");
                 await Task.Delay(250);
             }
+        }
+    }
+
+    private void DispatchExternalActivation(string[] arguments)
+    {
+        Window? window;
+        lock (_activationSync)
+        {
+            window = _window;
+            if (window is null)
+            {
+                _pendingExternalActivations.Enqueue(arguments);
+                return;
+            }
+        }
+
+        window.DispatcherQueue.TryEnqueue(() =>
+        {
+            MainWindow.Instance?.RestoreWindow();
+            HandleExternalArguments(arguments);
+        });
+    }
+
+    private void DrainPendingExternalActivations()
+    {
+        string[][] pending;
+        lock (_activationSync)
+        {
+            pending = _pendingExternalActivations.ToArray();
+            _pendingExternalActivations.Clear();
+        }
+
+        foreach (var arguments in pending)
+        {
+            HandleExternalArguments(arguments);
         }
     }
 
