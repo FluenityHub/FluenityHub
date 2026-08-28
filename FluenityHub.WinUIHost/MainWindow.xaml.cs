@@ -22,6 +22,7 @@ namespace FluenityHub_WinUIHost;
 
 public sealed partial class MainWindow : Window
 {
+
     private static readonly TimeSpan UnityAccountStatusFreshness = TimeSpan.FromSeconds(30);
     private static readonly Vector3 AccountButtonNormalScale = new(1f, 1f, 1f);
     private static readonly Vector3 AccountButtonHoverScale = new(0.94f, 0.94f, 1f);
@@ -48,6 +49,7 @@ public sealed partial class MainWindow : Window
     private bool _restoreAfterUnityExit;
     private bool _launchedUnityWasObserved;
     private DateTimeOffset _unityLaunchRequestedAt;
+    private bool _hasStartedUpdateCheck;
 
     public event EventHandler<UnityCliAuthState>? UnityAccountStateChanged;
     public UnityCliAuthState? UnityAccountState => _unityAccountState;
@@ -141,13 +143,51 @@ public sealed partial class MainWindow : Window
         _priorityMonitorTimer.Tick += OnPriorityMonitorTimerTick;
         _priorityMonitorTimer.Start();
 
-        RootFrame.Navigate(typeof(MainPage));
-        if (RootFrame.Content is MainPage mainPage)
+        ShowInitialContent();
+    }
+
+    private void ShowInitialContent()
+    {
+        ShowMainContent();
+    }
+
+    private void ShowMainContent(string? destination = null)
+    {
+        AccountButton.Visibility = Visibility.Visible;
+        if (RootFrame.Content is not MainPage)
         {
-            mainPage.InstallUpdateRequested += OnInstallUpdateRequested;
-            mainPage.SeeChangesRequested += OnSeeChangesRequested;
+            RootFrame.Navigate(
+                typeof(MainPage),
+                null,
+                new Microsoft.UI.Xaml.Media.Animation.EntranceNavigationTransitionInfo());
         }
-        CheckAppUpdatesOnLaunch();
+
+        if (RootFrame.Content is not MainPage mainPage)
+        {
+            return;
+        }
+
+        mainPage.InstallUpdateRequested += OnInstallUpdateRequested;
+        mainPage.SeeChangesRequested += OnSeeChangesRequested;
+
+        if (!string.IsNullOrWhiteSpace(destination))
+        {
+            mainPage.HandleExternalAction(destination);
+        }
+
+        if (!_hasStartedUpdateCheck)
+        {
+            _hasStartedUpdateCheck = true;
+            CheckAppUpdatesOnLaunch();
+        }
+    }
+
+    public void EnsureMainContentForExternalActivation()
+    {
+        if (RootFrame.Content is not MainPage)
+        {
+            ShowMainContent();
+        }
     }
 
     private AppUpdateInfo? _currentUpdateInfo;
@@ -332,7 +372,7 @@ public sealed partial class MainWindow : Window
     {
         AccountMenuFlyout.Hide();
         await Windows.System.Launcher.LaunchUriAsync(
-            new Uri("https://cloud.unity.com/home/organizations/18966914301594/settings/general"));
+            new Uri("https://cloud.unity.com/home/organizations"));
     }
 
     private async void OnUnityDiscussionsClick(object sender, RoutedEventArgs e)

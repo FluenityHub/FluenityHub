@@ -15,8 +15,8 @@
       MSIX builds are framework-dependent: Windows services the shared Windows
       App SDK framework and the package avoids duplicate/self-contained payloads.
     -->
-    <WindowsAppSdkSelfContained Condition="'$(GenerateAppxPackageOnBuild)' != 'true'">true</WindowsAppSdkSelfContained>
-    <WindowsAppSdkSelfContained Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">false</WindowsAppSdkSelfContained>
+    <WindowsPackageType Condition="'$(GenerateAppxPackageOnBuild)' != 'true'">None</WindowsPackageType>
+    <WindowsAppSdkSelfContained>true</WindowsAppSdkSelfContained>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <EnableWinAppRunSupport>true</EnableWinAppRunSupport>
     <AssemblyName>FluenityHub</AssemblyName>
@@ -38,7 +38,8 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
 
-  <ItemGroup>    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.ColorPicker" Version="8.2.251219" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
@@ -60,13 +61,9 @@
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug' or '$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug' or '$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishTrimmed>
-    <TrimMode Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">full</TrimMode>
-    <SelfContained Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</SelfContained>
-    <SelfContained Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">False</SelfContained>
-    <PublishAot Condition="'$(Configuration)' != 'Debug' and '$(GenerateAppxPackageOnBuild)' != 'true'">True</PublishAot>
-    <PublishAot Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">False</PublishAot>
+    <PublishTrimmed>False</PublishTrimmed>
+    <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
+    <PublishAot>False</PublishAot>
   </PropertyGroup>
   <!-- Modern Windows 11 Explorer command packaging is disabled until the
        release signing and installer registration path is ready.
@@ -87,3 +84,5 @@
   </Target>
   -->
 </Project>
+
+

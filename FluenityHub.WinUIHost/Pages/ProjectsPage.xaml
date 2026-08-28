@@ -737,19 +737,43 @@
                                             </MenuFlyoutSubItem>
                                         </MenuFlyoutSubItem>
 
-                                        <MenuFlyoutSeparator Visibility="{x:Bind IsSourceControlMenuVisible, Mode=OneWay}" />
+                                        <MenuFlyoutSeparator Visibility="{x:Bind IsConnectionMenuVisible, Mode=OneWay}" />
 
                                         <!-- Group 3: Source Control -->
                                         <MenuFlyoutItem
                                             Click="OnContextConnectSourceControlClick"
-                                            IsEnabled="{x:Bind IsConnectSourceControlMenuEnabled, Mode=OneWay}"
-                                            Text="{x:Bind ConnectSourceControlMenuText, Mode=OneWay}"
-                                            Visibility="{x:Bind IsSourceControlMenuVisible, Mode=OneWay}"
+                                            Text="Connect to source control..."
+                                            Visibility="{x:Bind IsConnectSourceControlMenuVisible, Mode=OneWay}"
                                             Tag="{x:Bind}">
                                             <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="{x:Bind ConnectSourceControlMenuIconGlyph, Mode=OneWay}" />
+                                                <FontIcon Glyph="&#xE8F7;" />
                                             </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
+                                        <MenuFlyoutSubItem
+                                            Text="Disconnect"
+                                            Visibility="{x:Bind IsDisconnectMenuVisible, Mode=OneWay}">
+                                            <MenuFlyoutSubItem.Icon>
+                                                <FontIcon Glyph="&#xE8F6;" />
+                                            </MenuFlyoutSubItem.Icon>
+                                            <MenuFlyoutItem
+                                                Click="OnContextDisconnectCloudClick"
+                                                Text="Disconnect from Unity Cloud"
+                                                Visibility="{x:Bind IsDisconnectCloudMenuVisible, Mode=OneWay}"
+                                                Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE711;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem
+                                                Click="OnContextDisconnectSourceControlClick"
+                                                Text="{x:Bind DisconnectSourceControlMenuText, Mode=OneWay}"
+                                                Visibility="{x:Bind IsDisconnectSourceControlMenuVisible, Mode=OneWay}"
+                                                Tag="{x:Bind}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE711;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyoutSubItem>
 
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem

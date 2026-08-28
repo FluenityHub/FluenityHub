@@ -245,3 +245,4 @@ internal sealed class UnityLicensingClientSession : IDisposable
         }
     }
 }
+

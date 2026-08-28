@@ -142,6 +142,36 @@ public sealed class GitService
             ReadOriginUrl(Path.Combine(gitDirectory, "config")));
     }
 
+    public static string? GetConfigurationPath(string projectPath)
+    {
+        var gitDirectory = ResolveGitDirectory(projectPath);
+        return gitDirectory is null ? null : Path.Combine(gitDirectory, "config");
+    }
+
+    public static Task<(bool Success, string ErrorMessage)> RemoveOriginAsync(string projectPath)
+    {
+        return Task.Run(() =>
+        {
+            var repository = GetRepositoryInfo(projectPath);
+            if (repository is null)
+            {
+                return (false, "The Git repository could not be found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(repository.RemoteUrl))
+            {
+                return (true, string.Empty);
+            }
+
+            var (success, output) = RunGit(projectPath, ["remote", "remove", "origin"]);
+            return success
+                ? (true, string.Empty)
+                : (false, string.IsNullOrWhiteSpace(output)
+                    ? "Git could not remove the origin remote."
+                    : output);
+        });
+    }
+
     private static string? ResolveGitDirectory(string projectPath)
     {
         try

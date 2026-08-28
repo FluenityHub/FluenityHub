@@ -17,12 +17,15 @@ public sealed partial class MainPage : Page
     {
         InitializeComponent();
         Instance = this;
+
         AppNavigationView.SelectedItem = FindNavigationItem("projects");
+        NavigateTopLevel(typeof(ProjectsPage), new SuppressNavigationTransitionInfo());
     }
 
     public event EventHandler? InstallUpdateRequested;
     public event EventHandler? SeeChangesRequested;
-public void ShowAppUpdate(string title, string message)
+
+    public void ShowAppUpdate(string title, string message)
     {
         AppUpdateInfoBar.Title = title;
         AppUpdateInfoBar.Message = message;
@@ -34,6 +37,7 @@ public void ShowAppUpdate(string title, string message)
 
     private void OnSeeChangesClick(object sender, RoutedEventArgs e)
         => SeeChangesRequested?.Invoke(this, EventArgs.Empty);
+
     private void OnNavigationViewSelectionChanged(
         NavigationView sender,
         NavigationViewSelectionChangedEventArgs args)
@@ -90,7 +94,7 @@ public void ShowAppUpdate(string title, string message)
         {
             AppNavigationView.SelectedItem = e.SourcePageType switch
             {
-                var pageType when pageType == typeof(SettingsPage) || pageType == typeof(LicensesPage)
+                var pageType when pageType == typeof(SettingsPage) || pageType == typeof(LicensesPage) || pageType == typeof(LocationsPage)
                     => AppNavigationView.SettingsItem,
                 var pageType when pageType == typeof(ProjectsPage)
                     => FindNavigationItem("projects"),
@@ -105,6 +109,25 @@ public void ShowAppUpdate(string title, string message)
         {
             _isSynchronizingNavigation = false;
         }
+    }
+
+    public void NavigateToProjects()
+    {
+        AppNavigationView.SelectedItem = FindNavigationItem("projects");
+        NavigateTopLevel(typeof(ProjectsPage), new EntranceNavigationTransitionInfo());
+    }
+
+    public void NavigateToLocations()
+    {
+        AppNavigationView.SelectedItem = AppNavigationView.SettingsItem;
+        NavigateTopLevel(typeof(SettingsPage), new EntranceNavigationTransitionInfo());
+        ContentFrame.Navigate(
+            typeof(LocationsPage),
+            null,
+            new SlideNavigationTransitionInfo
+            {
+                Effect = SlideNavigationTransitionEffect.FromRight
+            });
     }
 
     private void NavigateTopLevel(Type pageType, NavigationTransitionInfo? transitionInfo = null)

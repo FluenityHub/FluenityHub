@@ -36,6 +36,8 @@ public sealed class UnityProjectInfo
 
     public string? ConfiguredSourceControlProvider { get; init; }
 
+    public string? ConfiguredSourceControlPath { get; init; }
+
     public string? ConfiguredSourceControlOrganization { get; init; }
 
     public string? ConfiguredSourceControlRepository { get; init; }
@@ -43,6 +45,8 @@ public sealed class UnityProjectInfo
     public string? ProjectPathInsideRepository { get; init; }
 
     public bool IsSourceControlDisconnected { get; init; }
+
+    public bool IsVersionControlConnected { get; init; }
 
     public string? CommandLineArguments { get; set; }
 

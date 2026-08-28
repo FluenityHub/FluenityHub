@@ -36,15 +36,14 @@ public static class SourceControlDetectionService
 
         var configuredProvider = project.ConfiguredSourceControlProvider?.Trim();
         var unityVersionControl = TryGetUnityVersionControlWorkspace(projectPath);
-        var hasUnityVersionControlMarker = unityVersionControl is not null
-            || Directory.Exists(Path.Combine(projectPath, ".plastic"))
-            || File.Exists(Path.Combine(projectPath, "plastic.selector"))
-            || HasMarkerInProjectOrParent(projectPath, "plastic.workspace");
 
         // Unity Hub's project metadata is authoritative. A Unity Version Control
         // workspace can also contain a .git directory, so probing Git first
         // incorrectly reclassifies connected UVCS projects as Git repositories.
-        if (IsUnityVersionControlProvider(configuredProvider))
+        if (IsUnityVersionControlProvider(configuredProvider)
+            && (project.IsVersionControlConnected
+                || HasConfiguredRepository(project)
+                || unityVersionControl is not null))
         {
             return CreateUnityVersionControlResult(project, unityVersionControl);
         }
@@ -57,7 +56,7 @@ public static class SourceControlDetectionService
 
         // A parsed Plastic selector is stronger evidence than a generic .git
         // marker when Unity Hub did not persist a provider for the project.
-        if (unityVersionControl is not null || (hasUnityVersionControlMarker && gitRepository is null))
+        if (unityVersionControl is not null)
         {
             return CreateUnityVersionControlResult(project, unityVersionControl);
         }
@@ -67,13 +66,12 @@ public static class SourceControlDetectionService
             return CreateGitResult(project, gitRepository, configuredProvider);
         }
 
-        if (hasUnityVersionControlMarker)
-        {
-            return CreateUnityVersionControlResult(project, unityVersionControl);
-        }
-
         return null;
     }
+
+    private static bool HasConfiguredRepository(UnityProjectInfo project)
+        => !string.IsNullOrWhiteSpace(project.ConfiguredSourceControlOrganization)
+           && !string.IsNullOrWhiteSpace(project.ConfiguredSourceControlRepository);
 
     private static SourceControlDetectionResult CreateGitResult(
         UnityProjectInfo project,
@@ -160,6 +158,11 @@ public static class SourceControlDetectionService
                     "repository\\s+\"([^@\"\\r\\n]+)@([^@\"\\r\\n]+)@([^\"\\r\\n]+)\"",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+                if (!repositoryMatch.Success)
+                {
+                    continue;
+                }
+
                 return new UnityVersionControlWorkspaceInfo(
                     branchMatch.Success ? branchMatch.Groups[1].Value.Trim() : null,
                     changesetMatch.Success ? changesetMatch.Groups[1].Value.Trim() : null,
@@ -168,11 +171,11 @@ public static class SourceControlDetectionService
             }
             catch (IOException)
             {
-                // Treat a temporarily locked selector as an unparsed UVCS marker.
+                // A temporarily locked selector cannot establish a connection.
             }
             catch (UnauthorizedAccessException)
             {
-                // The provider metadata can still identify the workspace.
+                // Hub metadata can still establish a connection.
             }
         }
 
@@ -257,20 +260,6 @@ public static class SourceControlDetectionService
         return string.IsNullOrWhiteSpace(organization)
             ? repository
             : $"{organization}/{repository}";
-    }
-
-    private static bool HasMarkerInProjectOrParent(string projectPath, string markerName)
-    {
-        var directory = new DirectoryInfo(projectPath);
-        for (var depth = 0; directory is not null && depth < 8; depth++, directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, markerName)))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private sealed record UnityVersionControlWorkspaceInfo(

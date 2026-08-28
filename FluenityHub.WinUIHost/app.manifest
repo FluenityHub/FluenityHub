@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="FluenityHub.WinUIHost.app"/>
-  <msix xmlns="urn:schemas-microsoft-com:msix.v1" publisher="CN=AppPublisher" packageName="B2EEE620-A605-4BDE-855D-C1E1A7E311D0" applicationId="App" />
+  <msix xmlns="urn:schemas-microsoft-com:msix.v1" publisher="CN=FluenityHub" packageName="B2EEE620-A605-4BDE-855D-C1E1A7E311D0" applicationId="App" />
 
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>

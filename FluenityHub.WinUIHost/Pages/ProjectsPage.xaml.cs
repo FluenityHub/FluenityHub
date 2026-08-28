@@ -25,6 +25,7 @@ public sealed partial class ProjectsPage : Page
     private readonly UnityEditorLaunchService _editorLaunchService = new();
     private readonly UnityProjectShareLinkService _projectShareLinkService = new();
     private readonly WindowsShareService _windowsShareService = new();
+    private readonly ProjectConnectionService _projectConnectionService;
     private readonly UnityHubLocationSettingsService _unityHubLocationSettingsService = new();
     private readonly UnityModuleInstallationManager _moduleInstallationManager =
         UnityModuleInstallationManager.Instance;
@@ -33,6 +34,7 @@ public sealed partial class ProjectsPage : Page
     private readonly Dictionary<string, IReadOnlyList<TargetPlatformInfo>> _installedPlatforms = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ProjectListItemViewModel> _projectRows = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _launchingProjectPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _disconnectingProjectPaths = new(StringComparer.OrdinalIgnoreCase);
     private AppSettings _settings = new();
     private object? _hoveredHeaderButton;
     private string _sortCriteria = "LastModified"; // "Name", "LastModified", "EditorVersion", "Platform"
@@ -61,6 +63,7 @@ public sealed partial class ProjectsPage : Page
 
     public ProjectsPage()
     {
+        _projectConnectionService = new ProjectConnectionService(_projectService);
         InitializeComponent();
         ReloadData(showSuccessMessage: false);
     }
@@ -2492,50 +2495,29 @@ public sealed partial class ProjectsPage : Page
             try
             {
                 var project = viewModel.Project;
-                if (viewModel.IsGitBackedSourceControl)
+                var activeXamlRoot = GetActiveXamlRoot();
+                if (activeXamlRoot is null)
                 {
-                    var dialog = new ContentDialog
-                    {
-                        Title = $"Disconnect from {project.SourceControlProvider}?",
-                        Content = $"FluenityHub will stop showing source-control integration for '{project.Title}'. The local Git repository, history, and remote configuration will be kept.",
-                        PrimaryButtonText = "Disconnect",
-                        CloseButtonText = "Cancel",
-                        DefaultButton = ContentDialogButton.Close,
-                        XamlRoot = XamlRoot ?? Content?.XamlRoot,
-                        RequestedTheme = (XamlRoot?.Content as FrameworkElement)?.RequestedTheme ?? MainWindow.Instance?.CurrentTheme ?? ElementTheme.Default
-                    };
-
-                    var result = await dialog.ShowAsync();
-                    if (result == ContentDialogResult.Primary)
-                    {
-                        _projectService.DisconnectProjectFromSourceControl(project.Path);
-                        ReloadData(showSuccessMessage: false);
-                        ShowStatus($"Disconnected '{project.Title}' from {project.SourceControlProvider}. Git files were kept.", InfoBarSeverity.Success);
-                    }
+                    return;
                 }
-                else
+
+                var dialog = new ConnectSourceControlDialog(project)
                 {
-                    var activeXamlRoot = XamlRoot ?? Content?.XamlRoot;
-                    if (activeXamlRoot is null) return;
+                    XamlRoot = activeXamlRoot,
+                    RequestedTheme = GetDialogTheme()
+                };
 
-                    var dialog = new ConnectSourceControlDialog(project)
-                    {
-                        XamlRoot = activeXamlRoot,
-                        RequestedTheme = (activeXamlRoot.Content as FrameworkElement)?.RequestedTheme ?? MainWindow.Instance?.CurrentTheme ?? ElementTheme.Default
-                    };
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                {
+                    _projectService.ConnectProjectToSourceControl(
+                        project.Path,
+                        dialog.SelectedProvider,
+                        dialog.OrganizationName,
+                        dialog.RepositoryName);
 
-                    var result = await dialog.ShowAsync();
-                    if (result == ContentDialogResult.Primary)
-                    {
-                        _projectService.ConnectProjectToSourceControl(
-                            project.Path,
-                            dialog.SelectedProvider,
-                            dialog.OrganizationName,
-                            dialog.RepositoryName);
-
-                        ShowStatus($"Successfully connected '{project.Title}' to {dialog.SelectedProvider.ToUpperInvariant()}!", InfoBarSeverity.Success);
-                        ReloadData(showSuccessMessage: false);
-                    }
+                    ShowStatus($"Connected '{project.Title}' to {dialog.SelectedProvider}.", InfoBarSeverity.Success);
+                    ReloadData(showSuccessMessage: false);
                 }
             }
             catch (Exception ex)
@@ -2543,6 +2525,155 @@ public sealed partial class ProjectsPage : Page
                 ShowStatus($"Source control operation failed: {ex.Message}", InfoBarSeverity.Error);
             }
         }
+    }
+
+    private async void OnContextDisconnectCloudClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: ProjectListItemViewModel viewModel })
+        {
+            return;
+        }
+
+        var project = viewModel.Project;
+        if (!CanDisconnectProject(project) || !_disconnectingProjectPaths.Add(project.Path))
+        {
+            return;
+        }
+
+        try
+        {
+            var disconnectsVersionControl = ProjectConnectionService.IsUnityVersionControl(project);
+            var detail = disconnectsVersionControl
+                ? $"This removes the Unity Cloud connection from '{project.Title}' and disconnects its local Unity Version Control workspace. Local project files, the Cloud project, and the remote repository remain."
+                : $"This removes the Unity Cloud connection from '{project.Title}'. Local project files and the Cloud project remain.";
+            var confirmation = CreateDisconnectDialog("Disconnect from Unity Cloud?", detail);
+            if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            var result = await _projectConnectionService.DisconnectCloudAsync(project);
+            if (!result.Success)
+            {
+                ShowStatus(result.Message, InfoBarSeverity.Error);
+                return;
+            }
+
+            ReloadData(showSuccessMessage: false);
+            ShowStatus(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? $"Disconnected '{project.Title}' from Unity Cloud."
+                    : result.Message,
+                string.IsNullOrWhiteSpace(result.Message) ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Could not disconnect from Unity Cloud: {ex.Message}", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _disconnectingProjectPaths.Remove(project.Path);
+        }
+    }
+
+    private async void OnContextDisconnectSourceControlClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: ProjectListItemViewModel viewModel })
+        {
+            return;
+        }
+
+        var project = viewModel.Project;
+        if (!CanDisconnectProject(project) || !_disconnectingProjectPaths.Add(project.Path))
+        {
+            return;
+        }
+
+        try
+        {
+            var provider = string.IsNullOrWhiteSpace(project.SourceControlProvider)
+                ? "source control"
+                : project.SourceControlProvider;
+            string detail;
+            if (ProjectConnectionService.IsUnityVersionControl(project))
+            {
+                var metadataPath = ProjectConnectionService.GetUnityVersionControlMetadataPath(project);
+                detail = $"This removes the local Unity Version Control workspace connection from '{project.Title}'. Local project files and the remote repository remain."
+                         + (metadataPath is null ? string.Empty : $"\n\nWorkspace metadata: {metadataPath}");
+            }
+            else if (project.SourceControlHasRemote)
+            {
+                detail = $"This removes the origin remote from '{project.Title}'. The local Git repository, commits, branches, and other remotes remain.";
+            }
+            else
+            {
+                detail = $"FluenityHub will stop treating '{project.Title}' as connected source control. The local Git repository, commits, and branches remain.";
+            }
+
+            var confirmation = CreateDisconnectDialog($"Disconnect from {provider}?", detail);
+            if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            var result = await _projectConnectionService.DisconnectSourceControlAsync(project);
+            if (!result.Success)
+            {
+                ShowStatus(result.Message, InfoBarSeverity.Error);
+                return;
+            }
+
+            ReloadData(showSuccessMessage: false);
+            ShowStatus(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? $"Disconnected '{project.Title}' from {provider}."
+                    : result.Message,
+                string.IsNullOrWhiteSpace(result.Message) ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Could not disconnect from source control: {ex.Message}", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _disconnectingProjectPaths.Remove(project.Path);
+        }
+    }
+
+    private bool CanDisconnectProject(UnityProjectInfo project)
+    {
+        if (!Directory.Exists(project.Path))
+        {
+            ShowStatus($"Project folder not found: {project.Path}", InfoBarSeverity.Error);
+            return false;
+        }
+
+        if (UnityProcessService.IsProjectInUse(project.Path))
+        {
+            ShowStatus($"Close '{project.Title}' in Unity before disconnecting it.", InfoBarSeverity.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
+    private ContentDialog CreateDisconnectDialog(string title, string message)
+    {
+        return new ContentDialog
+        {
+            Title = title,
+            Content = new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap
+            },
+            PrimaryButtonText = "Disconnect",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = GetActiveXamlRoot(),
+            RequestedTheme = GetDialogTheme(),
+            Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style
+        };
     }
 
     private void OnContextRemoveProjectClick(object sender, RoutedEventArgs e)

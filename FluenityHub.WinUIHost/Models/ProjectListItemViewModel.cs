@@ -28,6 +28,9 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
         string.Equals(Project.SourceControlProvider, "Git", StringComparison.OrdinalIgnoreCase)
         || string.Equals(Project.SourceControlProvider, "GitHub", StringComparison.OrdinalIgnoreCase)
         || string.Equals(Project.SourceControlProvider, "GitLab", StringComparison.OrdinalIgnoreCase);
+    public bool HasCloudConnection => !string.IsNullOrWhiteSpace(Project.CloudProjectId)
+                                      && !string.IsNullOrWhiteSpace(Project.OrganizationId);
+    public bool IsUnityVersionControl => ProjectConnectionService.IsUnityVersionControl(Project);
     public string SourceControlLabel => string.IsNullOrWhiteSpace(Project.SourceControlDetail)
         ? Project.SourceControlProvider ?? string.Empty
         : $"{Project.SourceControlProvider} · {Project.SourceControlDetail}";
@@ -126,6 +129,10 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
                 _isSourceControlEnabled = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsSourceControlMenuVisible));
+                OnPropertyChanged(nameof(IsConnectSourceControlMenuVisible));
+                OnPropertyChanged(nameof(IsDisconnectSourceControlMenuVisible));
+                OnPropertyChanged(nameof(IsDisconnectMenuVisible));
+                OnPropertyChanged(nameof(IsConnectionMenuVisible));
                 OnPropertyChanged(nameof(IsSourceControlBadgeVisible));
                 OnPropertyChanged(nameof(Column1Width));
             }
@@ -159,13 +166,22 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
     public string SourceControlToolTip => HasSourceControl
         ? BuildSourceControlToolTip()
         : "Project doesn't use source control.";
-    public string ConnectSourceControlMenuText => IsGitBackedSourceControl
-        ? $"Disconnect from {Project.SourceControlProvider}"
-        : HasSourceControl
-            ? $"Managed by {Project.SourceControlProvider}"
-            : "Connect to source control...";
-    public string ConnectSourceControlMenuIconGlyph => IsGitBackedSourceControl ? "\uE711" : "\uE1DA";
-    public bool IsConnectSourceControlMenuEnabled => !HasSourceControl || IsGitBackedSourceControl;
+    public string DisconnectSourceControlMenuText => $"Disconnect from {Project.SourceControlProvider}";
+    public Visibility IsConnectSourceControlMenuVisible => IsSourceControlEnabled && !HasSourceControl
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility IsDisconnectCloudMenuVisible => HasCloudConnection
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility IsDisconnectSourceControlMenuVisible => IsSourceControlEnabled && HasSourceControl
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility IsDisconnectMenuVisible => HasCloudConnection || (IsSourceControlEnabled && HasSourceControl)
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+    public Visibility IsConnectionMenuVisible => IsSourceControlEnabled || HasCloudConnection
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     private string BuildSourceControlToolTip()
     {
@@ -420,9 +436,14 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SourceControlIconOpacity));
         OnPropertyChanged(nameof(SourceControlIconGlyph));
         OnPropertyChanged(nameof(SourceControlToolTip));
-        OnPropertyChanged(nameof(ConnectSourceControlMenuText));
-        OnPropertyChanged(nameof(ConnectSourceControlMenuIconGlyph));
-        OnPropertyChanged(nameof(IsConnectSourceControlMenuEnabled));
+        OnPropertyChanged(nameof(HasCloudConnection));
+        OnPropertyChanged(nameof(IsUnityVersionControl));
+        OnPropertyChanged(nameof(DisconnectSourceControlMenuText));
+        OnPropertyChanged(nameof(IsConnectSourceControlMenuVisible));
+        OnPropertyChanged(nameof(IsDisconnectCloudMenuVisible));
+        OnPropertyChanged(nameof(IsDisconnectSourceControlMenuVisible));
+        OnPropertyChanged(nameof(IsDisconnectMenuVisible));
+        OnPropertyChanged(nameof(IsConnectionMenuVisible));
         OnPropertyChanged(nameof(CanCopyShareLink));
         OnPropertyChanged(nameof(CopyShareLinkToolTip));
     }

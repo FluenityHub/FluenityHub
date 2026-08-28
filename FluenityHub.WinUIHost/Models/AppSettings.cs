@@ -2,6 +2,7 @@ namespace FluenityHub_WinUIHost.Models;
 
 public sealed class AppSettings
 {
+
     public bool GroupFavoritesFirst { get; set; } = true;
     public string AppTheme { get; set; } = "Default";
     public int MinimizeBehavior { get; set; } = 0;

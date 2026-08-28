@@ -49,7 +49,7 @@
                     <TextBox
                         x:Name="LocationTextBox"
                         AutomationProperties.Name="Location folder path"
-                        PlaceholderText="C:\Users\Username\Documents"
+                        PlaceholderText="Choose a folder"
                         TextChanged="OnInputChanged" />
                     <Button
                         Grid.Column="1"

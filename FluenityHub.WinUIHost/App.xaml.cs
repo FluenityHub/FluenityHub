@@ -129,7 +129,13 @@ public partial class App : Application
         }
 
         window.Activate();
-        HandleExternalArguments(Environment.GetCommandLineArgs().Skip(1).ToArray());
+        var launchArguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if (launchArguments.Length > 0)
+        {
+            window.EnsureMainContentForExternalActivation();
+        }
+
+        HandleExternalArguments(launchArguments);
         DrainPendingExternalActivations();
 
         try
@@ -222,6 +228,7 @@ public partial class App : Application
         window.DispatcherQueue.TryEnqueue(() =>
         {
             MainWindow.Instance?.RestoreWindow();
+            MainWindow.Instance?.EnsureMainContentForExternalActivation();
             HandleExternalArguments(arguments);
         });
     }
@@ -237,6 +244,7 @@ public partial class App : Application
 
         foreach (var arguments in pending)
         {
+            MainWindow.Instance?.EnsureMainContentForExternalActivation();
             HandleExternalArguments(arguments);
         }
     }

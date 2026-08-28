@@ -137,10 +137,12 @@ public sealed class UnityHubProjectService
 
             var commandLineArguments = ReadOptionalString(projectData, "commandLineArguments");
             var configuredSourceControlProvider = ReadOptionalString(projectData, "vcsProvider");
+            var configuredSourceControlPath = ReadOptionalString(projectData, "vcsConfigurationPath");
             var configuredSourceControlOrganization = ReadOptionalString(projectData, "organizationName");
             var configuredSourceControlRepository = ReadOptionalString(projectData, "repositoryName");
             var projectPathInsideRepository = ReadOptionalString(projectData, "projectPathInsideRepository");
             var isSourceControlDisconnected = ReadOptionalBoolean(projectData, "vcsDisconnected");
+            var isVersionControlConnected = ReadOptionalBoolean(projectData, "isVersionControlConnected");
             var group = ReadOptionalString(projectData, "group");
             var tags = databaseTags.TryGetValue(projectPath, out var currentTags)
                 ? currentTags
@@ -158,10 +160,12 @@ public sealed class UnityHubProjectService
                 LastModifiedUtc = DateTimeOffset.FromUnixTimeMilliseconds(lastModifiedMilliseconds).UtcDateTime,
                 IsFavorite = isFavorite,
                 ConfiguredSourceControlProvider = configuredSourceControlProvider,
+                ConfiguredSourceControlPath = configuredSourceControlPath,
                 ConfiguredSourceControlOrganization = configuredSourceControlOrganization,
                 ConfiguredSourceControlRepository = configuredSourceControlRepository,
                 ProjectPathInsideRepository = projectPathInsideRepository,
                 IsSourceControlDisconnected = isSourceControlDisconnected,
+                IsVersionControlConnected = isVersionControlConnected,
                 CommandLineArguments = commandLineArguments,
                 Group = string.IsNullOrWhiteSpace(group) ? "Ungrouped" : group,
                 Tags = tags
@@ -1043,34 +1047,184 @@ public sealed class UnityHubProjectService
         }
     }
 
-    public void DisconnectProjectFromSourceControl(string projectPath)
+    public bool DisconnectProjectFromSourceControl(string projectPath)
+        => UpdateProjectConnectionMetadata(projectPath, disconnectCloud: false, disconnectSourceControl: true);
+
+    public bool DisconnectProjectFromCloud(string projectPath, bool disconnectSourceControl)
+        => UpdateProjectConnectionMetadata(projectPath, disconnectCloud: true, disconnectSourceControl);
+
+    private bool UpdateProjectConnectionMetadata(
+        string projectPath,
+        bool disconnectCloud,
+        bool disconnectSourceControl)
     {
-        if (!File.Exists(ProjectsJsonPath)) return;
+        if (string.IsNullOrWhiteSpace(projectPath))
+        {
+            return false;
+        }
+
+        var databaseResult = TryUpdateProjectConnectionMetadataInDatabase(
+            projectPath,
+            disconnectCloud,
+            disconnectSourceControl);
+        if (databaseResult == false)
+        {
+            return false;
+        }
+
+        var jsonResult = TryUpdateProjectConnectionMetadataInJson(
+            projectPath,
+            disconnectCloud,
+            disconnectSourceControl);
+        return databaseResult == true || jsonResult;
+    }
+
+    private static bool? TryUpdateProjectConnectionMetadataInDatabase(
+        string projectPath,
+        bool disconnectCloud,
+        bool disconnectSourceControl)
+    {
+        if (!File.Exists(HubDatabasePath))
+        {
+            return null;
+        }
 
         try
         {
-            var text = ReadAllTextShared(ProjectsJsonPath);
-            var rootNode = JsonNode.Parse(text)?.AsObject();
-            if (rootNode is null) return;
-
-            if (rootNode["data"] is JsonObject dataObj && dataObj.ContainsKey(projectPath)
-                && dataObj[projectPath] is JsonObject existingObj)
+            using var connection = OpenHubDatabase(SqliteOpenMode.ReadWrite);
+            if (!HasProjectsTable(connection))
             {
-                existingObj.Remove("vcsProvider");
-                existingObj.Remove("vcsConfigurationPath");
-                existingObj.Remove("organizationName");
-                existingObj.Remove("repositoryName");
-                existingObj["vcsDisconnected"] = true;
+                return null;
+            }
 
-                var options = AppJsonContext.Default.Options;
-                CreateBackup();
-                WriteProjectsJsonAtomically(rootNode.ToJsonString(options));
+            ExecuteNonQuery(connection, "BEGIN IMMEDIATE");
+            try
+            {
+                using var readCommand = connection.CreateCommand();
+                readCommand.CommandText = "SELECT data FROM projects WHERE path = $path";
+                readCommand.Parameters.AddWithValue("$path", projectPath);
+                var storedData = readCommand.ExecuteScalar() as string;
+                if (storedData is null)
+                {
+                    ExecuteNonQuery(connection, "ROLLBACK");
+                    return HasProjectsMigrationMarker(connection) || HasAnyProjects(connection)
+                        ? false
+                        : null;
+                }
+
+                var projectObject = JsonNode.Parse(storedData)?.AsObject();
+                if (projectObject is null)
+                {
+                    ExecuteNonQuery(connection, "ROLLBACK");
+                    return false;
+                }
+
+                ApplyProjectConnectionDisconnect(
+                    projectObject,
+                    disconnectCloud,
+                    disconnectSourceControl);
+
+                using var updateCommand = connection.CreateCommand();
+                updateCommand.CommandText = """
+                    UPDATE projects
+                    SET data = $data, updated_at = $updatedAt
+                    WHERE path = $path
+                    """;
+                updateCommand.Parameters.AddWithValue(
+                    "$data",
+                    projectObject.ToJsonString(AppJsonContext.Default.Options));
+                updateCommand.Parameters.AddWithValue(
+                    "$updatedAt",
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                updateCommand.Parameters.AddWithValue("$path", projectPath);
+                var changedRows = updateCommand.ExecuteNonQuery();
+                ExecuteNonQuery(connection, "COMMIT");
+                return changedRows == 1;
+            }
+            catch
+            {
+                TryRollback(connection);
+                throw;
             }
         }
-        catch
+        catch (SqliteException)
         {
-            // Silently fail
+            return false;
         }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private bool TryUpdateProjectConnectionMetadataInJson(
+        string projectPath,
+        bool disconnectCloud,
+        bool disconnectSourceControl)
+    {
+        if (!File.Exists(ProjectsJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var rootNode = JsonNode.Parse(ReadAllTextShared(ProjectsJsonPath))?.AsObject();
+            if (rootNode?["data"] is not JsonObject data
+                || data[projectPath] is not JsonObject projectObject)
+            {
+                return false;
+            }
+
+            ApplyProjectConnectionDisconnect(
+                projectObject,
+                disconnectCloud,
+                disconnectSourceControl);
+            CreateBackup();
+            WriteProjectsJsonAtomically(rootNode.ToJsonString(AppJsonContext.Default.Options));
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static void ApplyProjectConnectionDisconnect(
+        JsonObject projectObject,
+        bool disconnectCloud,
+        bool disconnectSourceControl)
+    {
+        if (disconnectCloud)
+        {
+            projectObject.Remove("organizationId");
+            projectObject.Remove("cloudProjectId");
+            projectObject.Remove("projectName");
+            projectObject.Remove("genesisOrgId");
+        }
+
+        if (!disconnectSourceControl)
+        {
+            return;
+        }
+
+        projectObject.Remove("vcsProvider");
+        projectObject.Remove("vcsConfigurationPath");
+        projectObject.Remove("organizationName");
+        projectObject.Remove("repositoryName");
+        projectObject["vcsDisconnected"] = true;
     }
 
     public void ConnectProjectToSourceControl(string projectPath, string provider, string orgName, string repoName)

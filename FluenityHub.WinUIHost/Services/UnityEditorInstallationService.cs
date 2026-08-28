@@ -697,7 +697,7 @@ public sealed class UnityEditorInstallationService
         }
         catch { }
 
-        // 3. Downloads folder sibling/subfolder relative to installRoot (e.g. T:\unity\downloads if installRoot is T:\unity\editor)
+        // 3. Downloads folder beside or below the configured Editor installation directory.
         if (!string.IsNullOrWhiteSpace(installRoot))
         {
             try
