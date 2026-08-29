@@ -1,0 +1,3 @@
+#include "resource.h"
+
+IDI_FLUENITYHUB_ICON ICON "..\\..\\FluenityHub.WinUIHost\\Assets\\AppIcon.ico"

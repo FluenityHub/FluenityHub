@@ -76,6 +76,16 @@ public sealed partial class MainWindow : Window
         _moduleInstallationManager.OperationChanged += OnModuleInstallationChanged;
         JumpListService.SetWindowAppUserModelId(WindowHandle);
         _taskbarProgressService = new TaskbarProgressService(WindowHandle);
+        _trayIcon = new NativeTrayIcon(WindowHandle, OnTaskbarButtonCreated)
+        {
+            OnSettingsClicked = OpenSettingsFromTray,
+            OnExitClicked = ExitAppFromTray,
+            OnProjectClicked = LaunchProjectFromTray,
+            GetRecentProjects = () => new UnityHubProjectService().GetRecentProjects(
+                repairProjectsFile: false,
+                resolveProductNames: false)
+        };
+        AppWindow.Closing += OnWindowClosing;
         _taskbarErrorClearTimer.Interval = TimeSpan.FromSeconds(6);
         _taskbarErrorClearTimer.Tick += OnTaskbarErrorClearTimerTick;
         Activated += OnWindowActivatedForTaskbarProgress;
@@ -372,7 +382,7 @@ public sealed partial class MainWindow : Window
     {
         AccountMenuFlyout.Hide();
         await Windows.System.Launcher.LaunchUriAsync(
-            new Uri("https://cloud.unity.com/home/organizations"));
+            new Uri("https://cloud.unity.com/home/organizations/18966914301594/settings/general"));
     }
 
     private async void OnUnityDiscussionsClick(object sender, RoutedEventArgs e)
@@ -1211,7 +1221,10 @@ public sealed partial class MainWindow : Window
     public void MinimizeToTray()
     {
         // 1. Show the tray icon (NativeTrayIcon guards against double-add)
-        _trayIcon?.Show("FluenityHub");
+        if (_trayIcon?.Show("FluenityHub") != true)
+        {
+            return;
+        }
 
         // 2. Hide the window
         AppWindow.Hide();

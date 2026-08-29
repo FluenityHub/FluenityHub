@@ -130,12 +130,13 @@
                     </controls:SettingsCard>
 
                     <controls:SettingsCard
-                        Description="Shows Open with FluenityHub in the Windows 11 folder context menu"
+                        x:Name="ExplorerContextMenuSettingsCard"
+                        Description="Shows Open in FluenityHub for Unity project folders"
                         Header="File Explorer integration"
                         HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}">
                         <ToggleSwitch
                             x:Name="ExplorerContextMenuToggleSwitch"
-                            AutomationProperties.Name="Show Open with FluenityHub in File Explorer"
+                            AutomationProperties.Name="Show Open in FluenityHub in File Explorer"
                             IsOn="False"
                             Toggled="OnExplorerContextMenuToggled" />
                     </controls:SettingsCard>

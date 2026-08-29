@@ -77,9 +77,10 @@ public sealed class UnityModuleService
         }
 
         var modules = new List<UnityEditorModuleInfo>();
+        var moduleDepths = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var element in document.RootElement.EnumerateArray())
         {
-            ParseModule(element, string.Empty, modules);
+            ParseModule(element, string.Empty, modules, moduleDepths, 0);
         }
 
         var installationMetadata = ReadRemovalMetadata(document.RootElement);
@@ -497,8 +498,10 @@ public sealed class UnityModuleService
             var manifestText = await File.ReadAllTextAsync(manifestPath, cancellationToken);
             using var document = JsonDocument.Parse(manifestText);
             var modules = ReadRemovalMetadata(document.RootElement);
-            var module = modules.FirstOrDefault(candidate =>
-                candidate.Id.Equals(moduleId, StringComparison.OrdinalIgnoreCase));
+            var module = modules
+                .Where(candidate => candidate.Id.Equals(moduleId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(candidate => candidate.Depth)
+                .FirstOrDefault();
             if (module is null || !module.IsInstalled)
             {
                 return new(false, $"Module {moduleId} is not installed.", string.Empty);
@@ -919,7 +922,8 @@ public sealed class UnityModuleService
         long DownloadSizeBytes,
         long InstalledSizeBytes,
         bool IsInstalled,
-        bool IsRequired);
+        bool IsRequired,
+        int Depth);
 
     private sealed record ModuleInstallPlan(
         IReadOnlyList<string> ModuleIds,
@@ -945,9 +949,7 @@ public sealed class UnityModuleService
         {
             using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var metadata = ReadRemovalMetadata(document.RootElement);
-            var metadataById = metadata
-                .GroupBy(module => module.Id, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            var metadataById = BuildCanonicalRemovalMetadataMap(metadata);
             var modulesToInstall = new List<string>();
             var alreadyInstalled = new List<string>();
             var staleManifest = new List<string>();
@@ -1110,9 +1112,7 @@ public sealed class UnityModuleService
         {
             using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var metadata = ReadRemovalMetadata(document.RootElement);
-            var metadataById = metadata
-                .GroupBy(module => module.Id, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            var metadataById = BuildCanonicalRemovalMetadataMap(metadata);
             return requestedIds
                 .Where(id => !metadataById.TryGetValue(id, out var module)
                     || (TryGetInstalledPayloadState(
@@ -1176,8 +1176,10 @@ public sealed class UnityModuleService
         ModuleRemovalMetadata? module;
         using (var document = JsonDocument.Parse(File.ReadAllText(manifestPath)))
         {
-            module = ReadRemovalMetadata(document.RootElement).FirstOrDefault(candidate =>
-                candidate.Id.Equals(supportedModuleId, StringComparison.OrdinalIgnoreCase));
+            module = ReadRemovalMetadata(document.RootElement)
+                .Where(candidate => candidate.Id.Equals(supportedModuleId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(candidate => candidate.Depth)
+                .FirstOrDefault();
         }
 
         if (module is null || HasInstalledPayload(installDirectory, module, [module]))
@@ -1374,7 +1376,7 @@ public sealed class UnityModuleService
         var modules = new List<ModuleRemovalMetadata>();
         foreach (var element in root.EnumerateArray())
         {
-            ReadRemovalMetadata(element, string.Empty, modules);
+            ReadRemovalMetadata(element, string.Empty, modules, 0);
         }
 
         return modules;
@@ -1383,7 +1385,8 @@ public sealed class UnityModuleService
     private static void ReadRemovalMetadata(
         JsonElement element,
         string inheritedParentId,
-        ICollection<ModuleRemovalMetadata> modules)
+        ICollection<ModuleRemovalMetadata> modules,
+        int depth)
     {
         var id = ReadString(element, "id")?.Trim();
         if (!string.IsNullOrWhiteSpace(id))
@@ -1400,7 +1403,8 @@ public sealed class UnityModuleService
                 ReadSize(element, "downloadSize"),
                 ReadSize(element, "installedSize"),
                 ReadBoolean(element, "selected") == true || ReadBoolean(element, "isInstalled") == true,
-                ReadBoolean(element, "required") == true));
+                ReadBoolean(element, "required") == true,
+                depth));
         }
 
         if (element.TryGetProperty("subModules", out var children)
@@ -1408,10 +1412,19 @@ public sealed class UnityModuleService
         {
             foreach (var child in children.EnumerateArray())
             {
-                ReadRemovalMetadata(child, id ?? inheritedParentId, modules);
+                ReadRemovalMetadata(child, id ?? inheritedParentId, modules, depth + 1);
             }
         }
     }
+
+    private static Dictionary<string, ModuleRemovalMetadata> BuildCanonicalRemovalMetadataMap(
+        IEnumerable<ModuleRemovalMetadata> modules)
+        => modules
+            .GroupBy(module => module.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(module => module.Depth).First(),
+                StringComparer.OrdinalIgnoreCase);
 
     private static bool HasRemovablePaths(
         UnityEditorModuleInfo module,
@@ -1455,19 +1468,22 @@ public sealed class UnityModuleService
         IReadOnlyCollection<ModuleRemovalMetadata> installationMetadata)
     {
         var modulesById = modules.ToDictionary(module => module.Id, StringComparer.OrdinalIgnoreCase);
-        var metadataById = installationMetadata
-            .GroupBy(module => module.Id, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var metadataById = BuildCanonicalRemovalMetadataMap(installationMetadata);
         foreach (var module in modules)
         {
-            if (metadataById.TryGetValue(module.Id, out var metadata)
-                && TryGetInstalledPayloadState(
-                    installDirectory,
-                    metadata,
-                    installationMetadata,
-                    out var payloadIsPresent))
+            if (metadataById.TryGetValue(module.Id, out var metadata))
             {
-                module.IsInstalled = payloadIsPresent;
+                module.IsInstalled = metadata.IsInstalled;
+                if (module.IsInstalled
+                    && TryGetInstalledPayloadState(
+                        installDirectory,
+                        metadata,
+                        installationMetadata,
+                        out var payloadIsPresent)
+                    && !payloadIsPresent)
+                {
+                    module.IsInstalled = false;
+                }
             }
 
             if (!module.IsInstalled)
@@ -1809,7 +1825,9 @@ public sealed class UnityModuleService
     private static void ParseModule(
         JsonElement element,
         string parentId,
-        ICollection<UnityEditorModuleInfo> modules)
+        IList<UnityEditorModuleInfo> modules,
+        IDictionary<string, int> moduleDepths,
+        int depth)
     {
         if (ReadBoolean(element, "hidden") == true || ReadBoolean(element, "visible") == false)
         {
@@ -1826,7 +1844,7 @@ public sealed class UnityModuleService
             return;
         }
 
-        modules.Add(new UnityEditorModuleInfo
+        var module = new UnityEditorModuleInfo
         {
             Id = id,
             Name = name,
@@ -1841,14 +1859,34 @@ public sealed class UnityModuleService
             RenameTo = ReadString(element, "renameTo") ?? string.Empty,
             SyncId = ReadString(element, "sync") ?? string.Empty,
             LicenseTerms = ReadLicenseTerms(element, id, name)
-        });
+        };
+
+        if (!moduleDepths.TryGetValue(id, out var existingDepth))
+        {
+            moduleDepths[id] = depth;
+            modules.Add(module);
+        }
+        else if (depth < existingDepth)
+        {
+            for (var index = 0; index < modules.Count; index++)
+            {
+                if (!modules[index].Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                modules[index] = module;
+                moduleDepths[id] = depth;
+                break;
+            }
+        }
 
         if (element.TryGetProperty("subModules", out var children)
             && children.ValueKind == JsonValueKind.Array)
         {
             foreach (var child in children.EnumerateArray())
             {
-                ParseModule(child, id, modules);
+                ParseModule(child, id, modules, moduleDepths, depth + 1);
             }
         }
     }

@@ -103,6 +103,8 @@ public sealed class NativeTrayIcon : IDisposable
     private readonly SUBCLASSPROC _subclassProc; // Retain delegate reference to prevent GC collection during Win32 subclassing
     private readonly uint _taskbarButtonCreatedMessage;
     private bool _isCreated;
+    private bool _isVisibleRequested;
+    private string _tooltip = "FluenityHub";
     private IntPtr _hIcon;
     private bool _disposed;
 
@@ -125,9 +127,13 @@ public sealed class NativeTrayIcon : IDisposable
     /// Adds the tray icon to the Windows notification area.
     /// Safe to call multiple times — only the first call creates the icon.
     /// </summary>
-    public void Show(string tooltip)
+    public bool Show(string tooltip)
     {
-        if (_isCreated || _disposed) return;
+        if (_disposed) return false;
+
+        _isVisibleRequested = true;
+        _tooltip = tooltip;
+        if (_isCreated) return true;
 
         try
         {
@@ -159,6 +165,9 @@ public sealed class NativeTrayIcon : IDisposable
         {
             System.Diagnostics.Debug.WriteLine($"NativeTrayIcon.Show error: {ex}");
         }
+
+        _isVisibleRequested = _isCreated;
+        return _isCreated;
     }
 
     /// <summary>
@@ -167,6 +176,7 @@ public sealed class NativeTrayIcon : IDisposable
     /// </summary>
     public void Hide()
     {
+        _isVisibleRequested = false;
         if (!_isCreated) return;
 
         try
@@ -257,6 +267,13 @@ public sealed class NativeTrayIcon : IDisposable
         else if (_taskbarButtonCreatedMessage != 0
                  && uMsg == _taskbarButtonCreatedMessage)
         {
+            var restoreTrayIcon = _isVisibleRequested;
+            _isCreated = false;
+            if (restoreTrayIcon)
+            {
+                Show(_tooltip);
+            }
+
             OnTaskbarButtonCreated?.Invoke();
         }
         return DefSubclassProc(hWnd, uMsg, wParam, lParam);

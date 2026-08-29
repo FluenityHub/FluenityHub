@@ -57,7 +57,13 @@ public sealed partial class SettingsPage : Page
 
             if (ExplorerContextMenuToggleSwitch is not null)
             {
-                ExplorerContextMenuToggleSwitch.IsOn = _settings.ExplorerContextMenuEnabled;
+                var explorerIntegrationAvailable =
+                    ShellIntegrationService.IsModernExplorerContextMenuAvailable;
+                ExplorerContextMenuSettingsCard.Visibility = explorerIntegrationAvailable
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                ExplorerContextMenuToggleSwitch.IsOn = explorerIntegrationAvailable
+                    && _settings.ExplorerContextMenuEnabled;
             }
 
             if (EnableSourceControlToggleSwitch is not null)
@@ -174,7 +180,7 @@ public sealed partial class SettingsPage : Page
             SaveSettings();
             ShowStatus(
                 enabled
-                    ? "File Explorer integration enabled. The command appears after the app identity package is registered."
+                    ? "File Explorer integration enabled."
                     : "File Explorer integration disabled.",
                 InfoBarSeverity.Success);
         }

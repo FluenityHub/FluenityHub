@@ -65,24 +65,19 @@
     <SelfContained Condition="'$(Configuration)' != 'Debug'">True</SelfContained>
     <PublishAot>False</PublishAot>
   </PropertyGroup>
-  <!-- Modern Windows 11 Explorer command packaging is disabled until the
-       release signing and installer registration path is ready.
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">
     <ExplorerCommandPlatform Condition="'$(Platform)' == 'ARM64'">ARM64</ExplorerCommandPlatform>
     <ExplorerCommandPlatform Condition="'$(ExplorerCommandPlatform)' == ''">x64</ExplorerCommandPlatform>
-    <ExplorerCommandProject>$(MSBuildThisFileDirectory)..\Native\FluenityHub.ExplorerCommand\FluenityHub.ExplorerCommand.vcxproj</ExplorerCommandProject>
     <ExplorerCommandOutput>$(MSBuildThisFileDirectory)..\Native\FluenityHub.ExplorerCommand\$(ExplorerCommandPlatform)\$(Configuration)\FluenityHubExplorerCommand.dll</ExplorerCommandOutput>
   </PropertyGroup>
 
-  <Target Name="BuildExplorerCommand" BeforeTargets="CopyFilesToOutputDirectory" Condition="'$(DesignTimeBuild)' != 'true'">
-    <Exec Command="cmd /d /s /c &quot;&quot;$(MSBuildThisFileDirectory)..\Native\BuildExplorerCommand.cmd&quot; $(ExplorerCommandPlatform) $(Configuration)&quot;" />
-    <Copy SourceFiles="$(ExplorerCommandOutput)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
-  </Target>
+  <ItemGroup Condition="'$(GenerateAppxPackageOnBuild)' == 'true'">
+    <Content Include="$(ExplorerCommandOutput)" Link="FluenityHubExplorerCommand.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
-  <Target Name="CopyExplorerCommandToPublish" AfterTargets="Publish" DependsOnTargets="BuildExplorerCommand" Condition="'$(DesignTimeBuild)' != 'true'">
-    <Copy SourceFiles="$(ExplorerCommandOutput)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  <Target Name="BuildExplorerCommand" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true' and '$(GenerateAppxPackageOnBuild)' == 'true'">
+    <Exec Command="cmd /d /s /c &quot;&quot;$(MSBuildThisFileDirectory)..\Native\BuildExplorerCommand.cmd&quot; $(ExplorerCommandPlatform) $(Configuration)&quot;" />
   </Target>
-  -->
 </Project>
 
 
