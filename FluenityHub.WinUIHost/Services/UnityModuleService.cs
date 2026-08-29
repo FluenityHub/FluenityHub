@@ -950,6 +950,7 @@ public sealed class UnityModuleService
             using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var metadata = ReadRemovalMetadata(document.RootElement);
             var metadataById = BuildCanonicalRemovalMetadataMap(metadata);
+            var canonicalMetadata = metadataById.Values.ToArray();
             var modulesToInstall = new List<string>();
             var alreadyInstalled = new List<string>();
             var staleManifest = new List<string>();
@@ -965,7 +966,7 @@ public sealed class UnityModuleService
                 if (TryGetInstalledPayloadState(
                         installDirectory,
                         module,
-                        metadata,
+                        canonicalMetadata,
                         out var payloadIsPresent)
                     && payloadIsPresent)
                 {
@@ -982,7 +983,7 @@ public sealed class UnityModuleService
                 if (!TryGetInstalledPayloadState(
                         installDirectory,
                         module,
-                        metadata,
+                        canonicalMetadata,
                         out payloadIsPresent))
                 {
                     alreadyInstalled.Add(requestedId);
@@ -998,7 +999,7 @@ public sealed class UnityModuleService
             while (dependencyAdded)
             {
                 dependencyAdded = false;
-                foreach (var dependency in metadata)
+                foreach (var dependency in canonicalMetadata)
                 {
                     if ((!dependencyRoots.Contains(dependency.ParentId)
                          && !dependencyRoots.Contains(dependency.SyncId))
@@ -1012,7 +1013,7 @@ public sealed class UnityModuleService
                     if (TryGetInstalledPayloadState(
                             installDirectory,
                             dependency,
-                            metadata,
+                            canonicalMetadata,
                             out var dependencyPayloadIsPresent)
                         && dependencyPayloadIsPresent)
                     {
@@ -1023,7 +1024,7 @@ public sealed class UnityModuleService
                         && !TryGetInstalledPayloadState(
                             installDirectory,
                             dependency,
-                            metadata,
+                            canonicalMetadata,
                             out dependencyPayloadIsPresent))
                     {
                         continue;
@@ -1113,12 +1114,13 @@ public sealed class UnityModuleService
             using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var metadata = ReadRemovalMetadata(document.RootElement);
             var metadataById = BuildCanonicalRemovalMetadataMap(metadata);
+            var canonicalMetadata = metadataById.Values.ToArray();
             return requestedIds
                 .Where(id => !metadataById.TryGetValue(id, out var module)
                     || (TryGetInstalledPayloadState(
                             installDirectory,
                             module,
-                            metadata,
+                            canonicalMetadata,
                             out var payloadIsPresent)
                         && !payloadIsPresent))
                 .ToArray();
@@ -1469,6 +1471,7 @@ public sealed class UnityModuleService
     {
         var modulesById = modules.ToDictionary(module => module.Id, StringComparer.OrdinalIgnoreCase);
         var metadataById = BuildCanonicalRemovalMetadataMap(installationMetadata);
+        var canonicalMetadata = metadataById.Values.ToArray();
         foreach (var module in modules)
         {
             if (metadataById.TryGetValue(module.Id, out var metadata))
@@ -1478,7 +1481,7 @@ public sealed class UnityModuleService
                     && TryGetInstalledPayloadState(
                         installDirectory,
                         metadata,
-                        installationMetadata,
+                        canonicalMetadata,
                         out var payloadIsPresent)
                     && !payloadIsPresent)
                 {
@@ -1501,7 +1504,7 @@ public sealed class UnityModuleService
 
             if (metadataById.TryGetValue(module.Id, out metadata)
                 && metadata.IsInstalled
-                && !HasInstalledPayload(installDirectory, metadata, installationMetadata))
+                && !HasInstalledPayload(installDirectory, metadata, canonicalMetadata))
             {
                 module.IsInstalled = false;
                 continue;
