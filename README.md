@@ -25,6 +25,9 @@ Don't forget to raise an [issue or feedback](https://github.com/FluenityHub/Flue
 - .NET 10 SDK `10.0.400` or a compatible stable patch
 - Visual Studio with Windows application development tools, or the equivalent Windows SDK/MSIX build tools
 
+## UI Overview
+![Banners](https://github.com/user-attachments/assets/3e8a4853-4c3b-41a9-b686-7ddcce57416f)
+
 ## Third-party repositories and libraries used in this project
 
 Main compatibility and implementation references:
