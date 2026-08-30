@@ -64,7 +64,9 @@ public sealed class UnityCliAuthService
                 {
                     loginCancellation.Cancel();
                     await ObserveCanceledLoginAsync(loginTask);
-                    return polledStatus with { Message = "Signed in securely through Unity CLI." };
+                    var signedInState = polledStatus with { Message = "Signed in securely through Unity CLI." };
+                    UnityAccountConnectionState.SetDisconnected(false);
+                    return signedInState;
                 }
             }
 
@@ -73,7 +75,7 @@ public sealed class UnityCliAuthService
                 executablePath,
                 expectedLoggedIn: true,
                 cancellationToken);
-            return status.IsLoggedIn
+            var finalState = status.IsLoggedIn
                 ? status with { Message = "Signed in securely through Unity CLI." }
                 : loginResult.IsLoggedIn
                     ? loginResult
@@ -83,6 +85,12 @@ public sealed class UnityCliAuthService
                             ? loginResult.Message
                             : status.Message
                     };
+            if (finalState.IsLoggedIn)
+            {
+                UnityAccountConnectionState.SetDisconnected(false);
+            }
+
+            return finalState;
         }
         finally
         {
@@ -96,6 +104,8 @@ public sealed class UnityCliAuthService
 
     public async Task<UnityCliAuthState> LogoutAsync(CancellationToken cancellationToken = default)
     {
+        UnitySharedAuthService.CancelPendingOAuthRefreshes();
+
         var executablePath = await _toolService.GetVerifiedExecutablePathAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(executablePath))
         {
@@ -111,7 +121,7 @@ public sealed class UnityCliAuthService
             executablePath,
             expectedLoggedIn: false,
             cancellationToken);
-        return !status.IsLoggedIn
+        var finalState = !status.IsLoggedIn
             ? status with { Message = "Signed out of Unity." }
             : status with
             {
@@ -119,7 +129,15 @@ public sealed class UnityCliAuthService
                     ? logoutResult.Message
                     : "Unity CLI still reports an active account session."
             };
+        if (!finalState.IsLoggedIn)
+        {
+            UnityAccountConnectionState.SetDisconnected(true);
+            UnitySharedAuthService.CancelPendingOAuthRefreshes();
+        }
+
+        return finalState;
     }
+
 
     private async Task<UnityCliAuthState> RunAuthCommandAsync(
         string command,

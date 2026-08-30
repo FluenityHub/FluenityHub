@@ -54,6 +54,11 @@ internal static class UnitySharedAuthService
         account = null;
         errorMessage = string.Empty;
 
+        if (UnityAccountConnectionState.IsDisconnected)
+        {
+            return true;
+        }
+
         try
         {
             account = ReadActiveAccount();
@@ -145,6 +150,12 @@ internal static class UnitySharedAuthService
     {
         token = null;
         errorMessage = string.Empty;
+
+        if (UnityAccountConnectionState.IsDisconnected)
+        {
+            errorMessage = "FluenityHub is signed out of Unity. Sign in from the account menu and try again.";
+            return false;
+        }
 
         try
         {
@@ -463,6 +474,32 @@ internal static class UnitySharedAuthService
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
+    private static readonly object AuthRefreshSync = new();
+    private static CancellationTokenSource AuthRefreshCancellation = new();
+
+    public static void CancelPendingOAuthRefreshes()
+    {
+        CancellationTokenSource pendingRefresh;
+        lock (AuthRefreshSync)
+        {
+            pendingRefresh = AuthRefreshCancellation;
+            AuthRefreshCancellation = new CancellationTokenSource();
+        }
+
+        pendingRefresh.Cancel();
+        pendingRefresh.Dispose();
+    }
+
+    private static CancellationTokenSource CreateOAuthRefreshLinkedTokenSource(
+        CancellationToken cancellationToken)
+    {
+        lock (AuthRefreshSync)
+        {
+            return CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                AuthRefreshCancellation.Token);
+        }
+    }
 
     /// <summary>
     /// Silently renews the OAuth access token using the stored 30-day refresh token,
@@ -471,6 +508,9 @@ internal static class UnitySharedAuthService
     public static async Task<(UnitySharedAccessToken? Token, string ErrorMessage)> RefreshOAuthTokenAsync(
         CancellationToken cancellationToken = default)
     {
+        using var linkedCancellation = CreateOAuthRefreshLinkedTokenSource(cancellationToken);
+        cancellationToken = linkedCancellation.Token;
+
         if (!NetworkConnectivityService.Current.CanAttemptInternet)
         {
             return (null, NetworkConnectivityService.OfflineMessage);
@@ -582,6 +622,12 @@ internal static class UnitySharedAuthService
                 ["refreshTokenExpiration"] = newRefreshTokenExpiration
             };
 
+            cancellationToken.ThrowIfCancellationRequested();
+            if (UnityAccountConnectionState.IsDisconnected)
+            {
+                return (null, "FluenityHub is signed out of Unity.");
+            }
+
             // Write back to Windows Credential Manager
             WriteChunkedCredential(credentialAccount, updatedPayloadObj.ToJsonString());
 
@@ -663,13 +709,6 @@ internal static class UnitySharedAuthService
             if (!string.IsNullOrWhiteSpace(cli))
             {
                 return QueryAccount(database, cli);
-            }
-
-            // Preserve the account identity written by Unity Hub when the CLI
-            // has not established an explicit active account of its own.
-            if (!string.IsNullOrWhiteSpace(hub))
-            {
-                return QueryAccount(database, hub);
             }
 
             // A tombstone is consumer-specific. Only fall back to the shared

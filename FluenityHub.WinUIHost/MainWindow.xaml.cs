@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
     private bool _wasWindowDeactivated;
     private bool _refreshUnityAccountWhenIdle;
     private Task? _sharedUnityAccountRefreshTask;
+    private CancellationTokenSource? _sharedUnityAccountRefreshCancellation;
     private TaskbarProgressService? _taskbarProgressService;
     private int _activeEditorUninstallCount;
     private bool _restoreAfterUnityExit;
@@ -297,6 +298,17 @@ public sealed partial class MainWindow : Window
 
     public void UpdateUnityAccountState(UnityCliAuthState state)
     {
+        if (state.IsLoggedIn && UnityAccountConnectionState.IsDisconnected)
+        {
+            state = new UnityCliAuthState(
+                state.IsCliAvailable,
+                false,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "Not signed in");
+        }
+
         _unityAccountState = state;
         _unityAccountStatusCheckedAt = DateTimeOffset.UtcNow;
 
@@ -464,6 +476,7 @@ public sealed partial class MainWindow : Window
         string successTitle,
         bool expectLoggedIn)
     {
+        _sharedUnityAccountRefreshCancellation?.Cancel();
         _unityAccountCancellation?.Cancel();
         _unityAccountCancellation?.Dispose();
         _unityAccountCancellation = new CancellationTokenSource();
@@ -648,6 +661,9 @@ public sealed partial class MainWindow : Window
 
     private void CancelUnityAccountOperation()
     {
+        _sharedUnityAccountRefreshCancellation?.Cancel();
+        _sharedUnityAccountRefreshCancellation?.Dispose();
+        _sharedUnityAccountRefreshCancellation = null;
         _unityAccountCancellation?.Cancel();
         _unityAccountCancellation?.Dispose();
         _unityAccountCancellation = null;
@@ -827,15 +843,19 @@ public sealed partial class MainWindow : Window
             return _sharedUnityAccountRefreshTask;
         }
 
-        _sharedUnityAccountRefreshTask = RefreshSharedUnityAccountAsync();
+        _sharedUnityAccountRefreshCancellation?.Dispose();
+        _sharedUnityAccountRefreshCancellation = new CancellationTokenSource();
+        _sharedUnityAccountRefreshTask = RefreshSharedUnityAccountAsync(
+            _sharedUnityAccountRefreshCancellation.Token);
         return _sharedUnityAccountRefreshTask;
     }
 
-    private async Task RefreshSharedUnityAccountAsync()
+    private async Task RefreshSharedUnityAccountAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var state = await Task.Run(ReadSharedUnityAccountState);
+            var state = await Task.Run(ReadSharedUnityAccountState, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             UpdateUnityAccountState(state);
 
             if (state.IsLoggedIn && NetworkConnectivityService.Current.CanAttemptInternet)
@@ -845,27 +865,23 @@ public sealed partial class MainWindow : Window
                     && !UnitySharedAuthService.IsAccessTokenUsable(token)
                     && UnitySharedAuthService.HasUsableRefreshToken(token))
                 {
-                    _ = Task.Run(async () =>
+                    var (refreshed, _) = await Task.Run(
+                        () => UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken),
+                        cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (refreshed is not null)
                     {
-                        try
-                        {
-                            var (refreshed, _) = await UnitySharedAuthService.RefreshOAuthTokenAsync();
-                            if (refreshed is not null)
-                            {
-                                DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    var updatedState = ReadSharedUnityAccountState();
-                                    UpdateUnityAccountState(updatedState);
-                                });
-                            }
-                        }
-                        catch
-                        {
-                            // Best-effort background refresh
-                        }
-                    });
+                        var updatedState = await Task.Run(
+                            ReadSharedUnityAccountState,
+                            cancellationToken);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        UpdateUnityAccountState(updatedState);
+                    }
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
@@ -879,6 +895,7 @@ public sealed partial class MainWindow : Window
     private static UnityCliAuthState ReadSharedUnityAccountState()
     {
         var cliStatus = new UnityCliToolService().GetStatus();
+
         if (!UnitySharedAuthService.TryGetActiveAccount(out var account, out var errorMessage))
         {
             throw new IOException(errorMessage);
