@@ -4,7 +4,6 @@
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="License: GPL v3"></a>
   <a href="https://www.microsoft.com/windows/windows-11"><img src="https://custom-icon-badges.demolab.com/badge/Windows%2011-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows 11"></a>
-  <a href="https://learn.microsoft.com/windows/apps/winui/winui3/"><img src="https://img.shields.io/badge/UI-WinUI%203-0078D4?style=flat-square&logo=windows&logoColor=white" alt="UI: WinUI 3"></a>
 </div>
 
 <div align="center">
@@ -48,3 +47,5 @@ Main frameworks and libraries:
 Copyright © GID &amp; Contributors. Under GNU GPL v3.0 License. All rights reserved.
 
 FluenityHub is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See the [LICENSE](LICENSE) file for the full text.
+
+![GPL-v3](https://www.gnu.org/graphics/gplv3-127x51.png)
