@@ -15,7 +15,7 @@ FluenityHub is a native Windows application for managing Unity projects, Editor 
 
 # How Can I Download It?
 > [!NOTE]
-> Go to the Release Page > Click At the Assets > [Download The Latest Version](https://github.com/FluenityHub/FluenityHub/releases/latest "Download The Latest Version") (Recomended) Or [Download Apropriate Version  You Need](https://github.com/FluenityHub/FluenityHub/releases "Download Versions You Need")
+> Go to the Release Page > Click At the Assets > [Download The Latest Version](https://github.com/FluenityHub/FluenityHub/releases/latest "Download The Latest Version") (Recomended) Or [Download Version You Need](https://github.com/FluenityHub/FluenityHub/releases "Download Versions You Need")
 
 Don't forget to raise an [issue or feedback](https://github.com/FluenityHub/FluenityHub/issues/new/choose) if you have any!
 
