@@ -12,7 +12,7 @@ public sealed class EditorVersionChoice
     public bool RequiresInstallation { get; set; }
     public string DisplayName => $"Unity {Version}";
     public string Description => RequiresInstallation
-        ? "Required by this project · Not installed"
+        ? "Required by this project (Not installed)"
         : "Installed";
     public string BadgeText => GetBadgeText(Version);
     public Visibility BadgeVisibility => string.IsNullOrWhiteSpace(BadgeText)

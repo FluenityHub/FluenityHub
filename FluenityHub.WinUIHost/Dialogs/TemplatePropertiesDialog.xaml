@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="FluenityHub_WinUIHost.Dialogs.TemplatePropertiesDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:dialogs="using:FluenityHub_WinUIHost.Dialogs"
+    Title="Properties"
+    CloseButtonText="Close"
+    DefaultButton="Close"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">680</x:Double>
+    </ContentDialog.Resources>
+
+    <ListView
+        x:Name="PackagesListView"
+        MaxWidth="620"
+        MaxHeight="520"
+        HorizontalContentAlignment="Stretch"
+        AutomationProperties.Name="Template properties and packages"
+        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+        ScrollViewer.HorizontalScrollMode="Disabled"
+        SelectionMode="Single">
+        <ListView.Header>
+            <StackPanel>
+                <Grid ColumnSpacing="32">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="220" />
+                        <ColumnDefinition Width="*" MinWidth="220" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Margin="0,0,0,20" Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Title" />
+                        <TextBlock
+                            AutomationProperties.AutomationId="TemplatePropertiesTitle"
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind TemplateInfo.Name, Mode=OneTime}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="0,0,0,20" Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Version" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind TemplateInfo.DisplayVersion, Mode=OneTime}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="1"
+                        Grid.ColumnSpan="2"
+                        Margin="0,0,0,20"
+                        Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Description" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind TemplateInfo.DisplayDescription, Mode=OneTime}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="2"
+                        Grid.ColumnSpan="2"
+                        Margin="0,0,0,12"
+                        Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Tags" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind TagsDisplay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Border
+                        Grid.Row="3"
+                        Grid.ColumnSpan="2"
+                        Height="1"
+                        Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <StackPanel Grid.Row="4" Margin="0,12" Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Unity Editor" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind EditorVersionDisplay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,12" Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Date created" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind CreatedAtDisplay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Border
+                        Grid.Row="5"
+                        Grid.ColumnSpan="2"
+                        Height="1"
+                        Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <StackPanel
+                        Grid.Row="6"
+                        Grid.ColumnSpan="2"
+                        Margin="0,12,0,20"
+                        Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Category" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind CategoryDisplay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="7"
+                        Grid.ColumnSpan="2"
+                        Margin="0,0,0,12"
+                        Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="File location" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind TemplateInfo.TemplateFolderPath, Mode=OneTime}"
+                            TextWrapping="Wrap" />
+                        <HyperlinkButton
+                            x:Name="OpenLocationButton"
+                            MinHeight="28"
+                            Margin="0"
+                            Padding="0,2"
+                            HorizontalAlignment="Left"
+                            AutomationProperties.AutomationId="OpenTemplateLocationButton"
+                            AutomationProperties.Name="Open template file location"
+                            Click="OnOpenLocationClick"
+                            Content="Open file location" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="8"
+                        Grid.ColumnSpan="2"
+                        Spacing="4">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Size" />
+                        <TextBlock
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind SizeDisplay}" />
+                    </StackPanel>
+                </Grid>
+
+
+                <StackPanel Margin="0,16,0,0" Spacing="8">
+
+                    <TextBlock
+                        x:Name="NoPackagesTextBlock"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="This template has no associated packages."
+                        TextWrapping="Wrap" />
+                    <Border
+                        x:Name="PackagesTable"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        CornerRadius="{ThemeResource ControlCornerRadius}">
+                        <Grid Padding="12,6" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3*" />
+                                <ColumnDefinition Width="2*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Package" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Version" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ListView.Header>
+
+        <ListView.ItemContainerStyle>
+            <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+        </ListView.ItemContainerStyle>
+        <ListView.ItemTemplate>
+            <DataTemplate x:DataType="dialogs:TemplatePackageInfo">
+                <Grid Padding="12,8" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="2*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Text="{x:Bind Name, Mode=OneTime}"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Text="{x:Bind Version, Mode=OneTime}"
+                        TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </DataTemplate>
+        </ListView.ItemTemplate>
+    </ListView>
+</ContentDialog>

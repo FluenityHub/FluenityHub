@@ -5,8 +5,8 @@ public sealed class AppSettings
 
     public bool GroupFavoritesFirst { get; set; } = true;
     public string AppTheme { get; set; } = "Default";
-    public int MinimizeBehavior { get; set; } = 0;
-    public bool LowerPriorityWhenUnityOpens { get; set; } = false;
+    public int MinimizeBehavior { get; set; } = 1;
+    public bool LowerPriorityWhenUnityOpens { get; set; } = true;
     public bool EnableSourceControl { get; set; } = true;
     public bool ExplorerContextMenuEnabled { get; set; } = false;
     public bool AutoResetSandboxOnClose { get; set; } = false;

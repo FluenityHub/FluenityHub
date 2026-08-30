@@ -73,6 +73,7 @@ public sealed partial class ManageProjectTagsDialog : ContentDialog
 
         Title = $"Manage {itemType} Tags";
         SubtitleTextBlock.Text = $"Select or create custom tags for {title}.";
+        EmptyTagsTextBlock.Text = $"No tags assigned to this {itemType.ToLowerInvariant()} yet.";
 
         // Seed available categories with default presets + any existing tags from app/projects/templates
         var seedTags = new List<string> { "2D", "3D", "URP", "HDRP", "Mobile", "VR", "AR", "Core", "Multiplayer", "ShaderGraph", "Prototype", "Simulation", "Game", "Client Project", "Work in Progress" };

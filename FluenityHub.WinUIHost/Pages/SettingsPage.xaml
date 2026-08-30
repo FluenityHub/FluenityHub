@@ -300,7 +300,7 @@
                                             Padding="0"
                                             AutomationProperties.Name="GitHub Token Info"
                                             Style="{StaticResource SubtleButtonStyle}"
-                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;• Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;• Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;- Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;- Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
                                             <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
                                         </Button>
                                         <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="*" />
@@ -382,7 +382,7 @@
                                             Padding="0"
                                             AutomationProperties.Name="GitLab Token Info"
                                             Style="{StaticResource SubtleButtonStyle}"
-                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;Required Scopes:&#x0a;• api&#x0a;• read_user&#x0a;&#x0a;This allows FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                                            ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;Required Scopes:&#x0a;- api&#x0a;- read_user&#x0a;&#x0a;This allows FluenityHub to create the repository and sync your initial commit via HTTPS.">
                                             <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
                                         </Button>
                                         <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="*" />

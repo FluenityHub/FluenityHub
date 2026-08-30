@@ -45,11 +45,11 @@ public sealed partial class ConnectSourceControlDialog : ContentDialog
         {
             if (provider == "gitlab")
             {
-                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nRequired Scopes:\n• api\n• read_user\n\nThis allows FluenityHub to create the repository and sync your initial commit via HTTPS.");
+                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nRequired Scopes:\n- api\n- read_user\n\nThis allows FluenityHub to create the repository and sync your initial commit via HTTPS.");
             }
             else
             {
-                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nFor Classic Tokens:\n• Select repo scope\n\nFor Fine-grained Tokens:\n• Add the permissions Administration and Contents and set access to Read and Write.\n\nThese allow FluenityHub to create the repository and sync your initial commit via HTTPS.");
+                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nFor Classic Tokens:\n- Select repo scope\n\nFor Fine-grained Tokens:\n- Add the permissions Administration and Contents and set access to Read and Write.\n\nThese allow FluenityHub to create the repository and sync your initial commit via HTTPS.");
             }
         }
 

@@ -43,11 +43,11 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
         {
             if (provider == "gitlab")
             {
-                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nRequired Scopes:\n• api\n• read_user\n\nThis allows FluenityHub to list and clone your repositories via HTTPS.");
+                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nRequired Scopes:\n- api\n- read_user\n\nThis allows FluenityHub to list and clone your repositories via HTTPS.");
             }
             else
             {
-                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nFor Classic Tokens:\n• Select repo scope\n\nFor Fine-grained Tokens:\n• Grant repository Contents read access.\n\nThese allow FluenityHub to list and clone your repositories via HTTPS.");
+                ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nFor Classic Tokens:\n- Select repo scope\n\nFor Fine-grained Tokens:\n- Grant repository Contents read access.\n\nThese allow FluenityHub to list and clone your repositories via HTTPS.");
             }
         }
     }

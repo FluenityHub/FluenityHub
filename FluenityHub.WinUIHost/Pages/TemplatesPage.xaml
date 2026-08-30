@@ -260,6 +260,14 @@
                                             <FontIcon Glyph="&#xE8B7;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnTemplatePropertiesClick"
+                                        Tag="{x:Bind}"
+                                        Text="Properties">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE90F;" />
+                                            </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
                                     <MenuFlyoutSeparator />
                                     <MenuFlyoutItem
                                         Click="OnDeleteTemplateClick"
@@ -495,6 +503,14 @@
                                                         <MenuFlyoutItem.Icon>
                                                             <FontIcon Glyph="&#xE8B7;" />
                                                         </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutItem
+                                                        Click="OnTemplatePropertiesClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="Properties">
+                                                            <MenuFlyoutItem.Icon>
+                                                                <FontIcon Glyph="&#xE90F;" />
+                                                            </MenuFlyoutItem.Icon>
                                                     </MenuFlyoutItem>
                                                     <MenuFlyoutSeparator />
                                                     <!-- Group 4: Destructive -->

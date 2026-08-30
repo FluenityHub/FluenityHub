@@ -12,6 +12,8 @@
             </ResourceDictionary.MergedDictionaries>
 
             <Style TargetType="controls:OpacityMaskView">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="controls:OpacityMaskView">

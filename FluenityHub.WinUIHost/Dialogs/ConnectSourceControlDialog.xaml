@@ -53,7 +53,7 @@
                         Padding="0"
                         AutomationProperties.Name="Token Info"
                         Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;• Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;• Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
+                        ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;- Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;- Add the permissions Administration and Contents and set access to Read and Write.&#x0a;&#x0a;These allow FluenityHub to create the repository and sync your initial commit via HTTPS.">
                         <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
                     </Button>
                     <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />

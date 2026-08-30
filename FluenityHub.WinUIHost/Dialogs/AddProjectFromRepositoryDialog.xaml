@@ -55,7 +55,7 @@
                         Padding="0"
                         AutomationProperties.Name="Personal Access Token Info"
                         Style="{StaticResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;• Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;• Grant repository Contents read access.&#x0a;&#x0a;These allow FluenityHub to list and clone your repositories via HTTPS.">
+                        ToolTipService.ToolTip="Your token is stored securely in your OS keychain.&#x0a;&#x0a;For Classic Tokens:&#x0a;- Select repo scope&#x0a;&#x0a;For Fine-grained Tokens:&#x0a;- Grant repository Contents read access.&#x0a;&#x0a;These allow FluenityHub to list and clone your repositories via HTTPS.">
                         <FontIcon FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="&#xE9CE;" />
                     </Button>
                     <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="*" />

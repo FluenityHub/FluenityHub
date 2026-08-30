@@ -21,7 +21,7 @@ public sealed partial class CreateProjectFromTemplateDialog : ContentDialog
         LocationTextBox.Text =
             new UnityHubProjectSettingsService().GetProjectLocation();
         TemplateInfoBar.Title = template.Name;
-        var versionInfo = $"Version {template.DisplayVersion} · Unity {template.EditorVersion}";
+        var versionInfo = $"Version {template.DisplayVersion} (Unity {template.EditorVersion})";
         TemplateInfoBar.Message = string.IsNullOrWhiteSpace(template.Description)
             ? versionInfo
             : $"{template.Description}\r\n{versionInfo}";

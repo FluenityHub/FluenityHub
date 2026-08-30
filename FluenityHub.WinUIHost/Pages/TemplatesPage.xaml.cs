@@ -647,7 +647,17 @@ public sealed partial class TemplatesPage : Page
                     template.Version,
                     replacementImagePath: null,
                     removeImage: false,
-                    tags: updatedTags);
+                    tags: updatedTags,
+                    rewriteArchive: false);
+
+                if (updatedTemplate is null)
+                {
+                    ShowStatus(
+                        "Failed to update tags",
+                        "The template metadata or archive could not be updated.",
+                        InfoBarSeverity.Error);
+                    return;
+                }
 
                 await ReloadDataAsync();
                 ShowStatus("Tags updated", $"Tags for “{template.Name}” have been updated.", InfoBarSeverity.Success);
@@ -685,6 +695,36 @@ public sealed partial class TemplatesPage : Page
         {
             Debug.WriteLine($"OnShowInExplorerClick failed: {ex}");
             ShowStatus("Folder could not be opened", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnTemplatePropertiesClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not CustomTemplateInfo template)
+        {
+            return;
+        }
+
+        try
+        {
+            var activeXamlRoot = XamlRoot ?? Content?.XamlRoot;
+            if (activeXamlRoot is null)
+            {
+                return;
+            }
+
+            var dialog = new TemplatePropertiesDialog(template)
+            {
+                XamlRoot = activeXamlRoot,
+                RequestedTheme = MainWindow.Instance?.CurrentTheme ?? ElementTheme.Default
+            };
+
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OnTemplatePropertiesClick failed: {ex}");
+            ShowStatus("Properties could not be opened", ex.Message, InfoBarSeverity.Error);
         }
     }
 

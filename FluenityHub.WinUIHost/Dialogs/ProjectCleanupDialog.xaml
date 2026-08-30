@@ -37,7 +37,7 @@
                     x:Name="ProjectPathTextBlock"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="Project folder"
+                    Text="C:\Projects\MyUnityProject"
                     TextTrimming="CharacterEllipsis" />
             </StackPanel>
 

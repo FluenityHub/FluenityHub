@@ -538,12 +538,12 @@ public sealed partial class SettingsPage : Page
         var diagnosticLocations = _unityDiagnosticLocationService.ResolveAll();
         var availableDiagnosticLocations = diagnosticLocations.Count(location => location.Exists);
         var summary =
-            $"Projects: {_unityHubProjectSettingsService.GetProjectLocation()} · " +
-            $"Templates: {_templateSettingsService.GetCurrentPath()} · " +
-            $"Editors: {_unityHubLocationSettingsService.GetInstallLocation()} · " +
-            $"Downloads: {_unityHubLocationSettingsService.GetDownloadLocation()} · " +
-            $"Names: {projectNameMode} · " +
-            $"Security: {tokenStorageMode} · " +
+            $"Projects: {_unityHubProjectSettingsService.GetProjectLocation()}, " +
+            $"Templates: {_templateSettingsService.GetCurrentPath()}, " +
+            $"Editors: {_unityHubLocationSettingsService.GetInstallLocation()}, " +
+            $"Downloads: {_unityHubLocationSettingsService.GetDownloadLocation()}, " +
+            $"Names: {projectNameMode}, " +
+            $"Security: {tokenStorageMode}, " +
             $"Diagnostics: {availableDiagnosticLocations}/{diagnosticLocations.Count} locations available";
 
         ShowUnityHubStatus(
@@ -592,7 +592,7 @@ public sealed partial class SettingsPage : Page
         if (status.IsInstalled)
         {
             UnityCliDescriptionTextBlock.Text =
-                $"Unity CLI {status.Version} · {UnityCliToolService.ReleaseChannelDisplayName} channel · Managed by FluenityHub.";
+                $"Unity CLI {status.Version} ({UnityCliToolService.ReleaseChannelDisplayName} channel) - Managed by FluenityHub.";
             UnityCliActionTextBlock.Text = "Check for updates";
             UnityCliMoreButton.Visibility = Visibility.Visible;
         }

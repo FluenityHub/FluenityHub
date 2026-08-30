@@ -23,7 +23,7 @@ public sealed class UnityModuleProgressListItem : INotifyPropertyChanged
     public string DisplayPhase => IsWaiting ? "Waiting" : Phase;
     public string Message => _snapshot.Message;
     public string Details => _snapshot.IsDependency
-        ? $"Dependency · {Message}"
+        ? $"Dependency: {Message}"
         : Message;
     public string StatusGlyph
     {
@@ -164,7 +164,7 @@ public sealed class UnityModuleInstallationListItem : INotifyPropertyChanged
     {
         UnityModuleOperationKind.Repair => $"Repairing {_snapshot.Modules[0].Name}",
         UnityModuleOperationKind.Remove => $"Removing {_snapshot.Modules[0].Name}",
-        _ => $"{_snapshot.ModuleCount} selected module{(_snapshot.ModuleCount == 1 ? string.Empty : "s")} · "
+        _ => $"{_snapshot.ModuleCount} selected module{(_snapshot.ModuleCount == 1 ? string.Empty : "s")}, "
             + $"{FormatBytes(_snapshot.DownloadSizeBytes)} download"
     };
     public double Percentage => _snapshot.Percentage ?? 0;

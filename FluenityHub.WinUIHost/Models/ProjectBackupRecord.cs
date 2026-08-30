@@ -53,8 +53,8 @@ public sealed class ProjectBackupRecord
                 options.Add("Git history");
             }
 
-            var optionsText = options.Count == 0 ? "Project files" : string.Join(" · ", options);
-            return $"{SizeDisplay} · {optionsText}";
+            var optionsText = options.Count == 0 ? "Project files" : string.Join(", ", options);
+            return $"{SizeDisplay} ({optionsText})";
         }
     }
 

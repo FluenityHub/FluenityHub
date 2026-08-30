@@ -273,7 +273,7 @@ public sealed partial class ProjectCopyDialog : ContentDialog
             ? $"{FormatBytes(progress.BytesCopied)} of {FormatBytes(progress.TotalBytes)}"
             : string.Empty;
         OperationMetricsTextBlock.Text = string.Join(
-            " · ",
+            ", ",
             new[] { fileText, byteText }.Where(value => !string.IsNullOrWhiteSpace(value)));
     }
 

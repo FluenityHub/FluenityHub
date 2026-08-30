@@ -33,7 +33,7 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
     public bool IsUnityVersionControl => ProjectConnectionService.IsUnityVersionControl(Project);
     public string SourceControlLabel => string.IsNullOrWhiteSpace(Project.SourceControlDetail)
         ? Project.SourceControlProvider ?? string.Empty
-        : $"{Project.SourceControlProvider} · {Project.SourceControlDetail}";
+        : $"{Project.SourceControlProvider}: {Project.SourceControlDetail}";
 
     public IReadOnlyList<string> Tags => Project.Tags;
     public bool HasTags => Project.Tags.Count > 0;

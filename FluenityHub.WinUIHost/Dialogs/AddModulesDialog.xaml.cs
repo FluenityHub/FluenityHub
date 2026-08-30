@@ -60,7 +60,7 @@ public sealed partial class AddModulesDialog : ContentDialog
         {
             var catalog = _moduleService.LoadCatalog(editor);
             _selectionTitle = projectCount > 0
-                ? $"Add modules for {catalog.ProductName} ({editor.Version}) · {projectCount} project{(projectCount == 1 ? string.Empty : "s")}"
+                ? $"Add modules for {catalog.ProductName} ({editor.Version}) - {projectCount} project{(projectCount == 1 ? string.Empty : "s")}"
                 : $"Add modules for {catalog.ProductName} ({editor.Version})";
             InitializeModuleSelection(catalog);
         }

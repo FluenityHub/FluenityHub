@@ -697,7 +697,7 @@ public sealed class UnityEditorInstallationService
         }
         catch { }
 
-        // 3. Downloads folder beside or below the configured Editor installation directory.
+        // Check download folders beside and inside the selected Editor install root.
         if (!string.IsNullOrWhiteSpace(installRoot))
         {
             try

@@ -1013,7 +1013,7 @@ public sealed partial class EditorsPage : Page
 
             DownloadsSummaryTextBlock.Text = activeOperations.Count == 1
                 ? current.Phase
-                : $"{activeOperations.Count} installations · {current.Phase}";
+                : $"{activeOperations.Count} installations - {current.Phase}";
             DownloadsSummaryProgressBar.IsIndeterminate =
                 !hasKnownProgress
                 && current.State is not UnityModuleInstallationState.Queued;

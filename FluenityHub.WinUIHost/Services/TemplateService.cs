@@ -409,7 +409,8 @@ public sealed class TemplateService
         string version,
         string? replacementImagePath,
         bool removeImage,
-        IEnumerable<string>? tags = null)
+        IEnumerable<string>? tags = null,
+        bool rewriteArchive = true)
     {
         return await Task.Run(() =>
         {
@@ -508,7 +509,7 @@ public sealed class TemplateService
                     tarballPath = Path.Combine(template.TemplateFolderPath, $"{slug}.tgz");
                 }
 
-                if (File.Exists(tarballPath))
+                if (rewriteArchive && File.Exists(tarballPath))
                 {
                     RewriteTarGz(
                         tarballPath,
@@ -1022,15 +1023,26 @@ public sealed class TemplateService
         string imageSourcePath,
         string imageEntryFileName)
     {
-        var temporaryTarPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.tar");
-        var temporaryTgzPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.tgz");
+        var tarballDirectory = Path.GetDirectoryName(tarballPath)
+            ?? throw new InvalidOperationException("The template archive has no parent folder.");
+        var temporaryTgzPath = Path.Combine(
+            tarballDirectory,
+            $".{Path.GetFileName(tarballPath)}.{Guid.NewGuid():N}.tmp");
 
         try
         {
             using (var inputFile = File.OpenRead(tarballPath))
             using (var inputGzip = new GZipStream(inputFile, CompressionMode.Decompress))
             using (var reader = new TarReader(inputGzip))
-            using (var writer = new TarWriter(File.Create(temporaryTarPath)))
+            using (var targetFile = new FileStream(
+                temporaryTgzPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 1024 * 1024,
+                FileOptions.SequentialScan))
+            using (var outputGzip = new GZipStream(targetFile, CompressionLevel.Optimal))
+            using (var writer = new TarWriter(outputGzip, TarEntryFormat.Pax, leaveOpen: false))
             {
                 var manifestBytes = Encoding.UTF8.GetBytes(packageJsonContent);
                 using var manifestStream = new MemoryStream(manifestBytes, writable: false);
@@ -1057,24 +1069,81 @@ public sealed class TemplateService
                         continue;
                     }
 
-                    writer.WriteEntry(entry);
+                    using var seekableData = CreateSeekableTarEntryDataStream(entry);
+                    var outputEntry = CloneAsPaxEntry(entry, seekableData);
+                    writer.WriteEntry(outputEntry);
                 }
-            }
-
-            using (var rawTarStream = File.OpenRead(temporaryTarPath))
-            using (var targetStream = File.Create(temporaryTgzPath))
-            using (var gzipStream = new GZipStream(targetStream, CompressionLevel.Optimal))
-            {
-                rawTarStream.CopyTo(gzipStream);
             }
 
             File.Move(temporaryTgzPath, tarballPath, overwrite: true);
         }
         finally
         {
-            if (File.Exists(temporaryTarPath)) File.Delete(temporaryTarPath);
             if (File.Exists(temporaryTgzPath)) File.Delete(temporaryTgzPath);
         }
+    }
+    private static Stream? CreateSeekableTarEntryDataStream(TarEntry entry)
+    {
+        if (entry.DataStream is null)
+        {
+            return null;
+        }
+
+        const long memoryBufferLimit = 8 * 1024 * 1024;
+        Stream buffer;
+        if (entry.Length <= memoryBufferLimit)
+        {
+            buffer = new MemoryStream(entry.Length > 0 ? checked((int)entry.Length) : 0);
+        }
+        else
+        {
+            var stagingDirectory = Path.Combine(
+                new UnityHubLocationSettingsService().GetDownloadLocation(),
+                "FluenityHub",
+                "TemplateArchiveBuffers");
+            Directory.CreateDirectory(stagingDirectory);
+            var stagingPath = Path.Combine(stagingDirectory, $"{Guid.NewGuid():N}.tmp");
+            buffer = new FileStream(
+                stagingPath,
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 1024 * 1024,
+                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+        }
+
+        try
+        {
+            entry.DataStream.CopyTo(buffer);
+            buffer.Position = 0;
+            return buffer;
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
+    }
+
+    private static PaxTarEntry CloneAsPaxEntry(TarEntry source, Stream? dataStream)
+    {
+        var entryType = source.EntryType == TarEntryType.V7RegularFile
+            ? TarEntryType.RegularFile
+            : source.EntryType;
+        var output = source is PaxTarEntry paxEntry
+            ? new PaxTarEntry(entryType, source.Name, paxEntry.ExtendedAttributes)
+            : new PaxTarEntry(entryType, source.Name);
+
+        output.Gid = source.Gid;
+        output.Uid = source.Uid;
+        output.Mode = source.Mode;
+        output.ModificationTime = source.ModificationTime;
+        if (entryType is TarEntryType.HardLink or TarEntryType.SymbolicLink)
+        {
+            output.LinkName = source.LinkName;
+        }
+        output.DataStream = dataStream;
+        return output;
     }
 
     private static bool IsPackageRootTemplateImage(string entryName, string slug)

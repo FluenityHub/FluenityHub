@@ -31,7 +31,7 @@ public sealed class UnityEditorReleaseListItem
     public bool CanInstall => !IsInstalled;
     public string InstallButtonText => IsInstalled ? "Installed" : "Install";
     public string ReleaseSummary =>
-        $"{Release.ReleaseDate:MMM d, yyyy} · {FormatBytes(Release.DownloadSizeBytes)}";
+        $"{Release.ReleaseDate:MMM d, yyyy} - {FormatBytes(Release.DownloadSizeBytes)}";
     public Uri ReleaseNotesUri =>
         new($"https://unity.com/releases/editor/whats-new/{Uri.EscapeDataString(Release.Version)}#notes");
     public string ReleaseNotesAutomationName => $"Open release notes for Unity {Release.Version}";
