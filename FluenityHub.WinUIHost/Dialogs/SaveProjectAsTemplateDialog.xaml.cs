@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
@@ -37,6 +38,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
     private bool _isStep1 = true;
     private bool _isAuthorized;
     private bool _isBusy;
+    private CancellationTokenSource? _creationCancellation;
     private bool _showValidationErrors;
     private string? _selectedSourceProjectPath;
     private string? _customImagePath;
@@ -67,7 +69,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         _installedEditors = installedEditors;
 
         SourceProjectComboBox.ItemsSource = _availableProjects.Select(p => p.Title).ToList();
-        SelectedRootFilesListView.ItemsSource = _selectedRootFiles;
+        SelectedRootFilesRepeater.ItemsSource = _selectedRootFiles;
 
         if (!string.IsNullOrEmpty(preselectedProjectPath))
         {
@@ -97,7 +99,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
             RequestedTheme = MainWindow.Instance.CurrentTheme;
         }
 
-        SelectedRootFilesListView.ItemsSource = _selectedRootFiles;
+        SelectedRootFilesRepeater.ItemsSource = _selectedRootFiles;
         ConfigureEditMode();
         UpdateWizardStepUI();
     }
@@ -409,7 +411,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
     private void UpdateSelectedRootFilesState()
     {
         var hasSelectedFiles = _selectedRootFiles.Count > 0;
-        SelectedRootFilesListView.Visibility = hasSelectedFiles ? Visibility.Visible : Visibility.Collapsed;
+        SelectedRootFilesRepeater.Visibility = hasSelectedFiles ? Visibility.Visible : Visibility.Collapsed;
         ReplaceNamePlaceholderCheckBox.IsEnabled = hasSelectedFiles;
         if (!hasSelectedFiles)
         {
@@ -985,6 +987,7 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         }
 
         // Step 2 Create template processing
+        args.Cancel = true;
         var deferral = args.GetDeferral();
         try
         {
@@ -1022,85 +1025,91 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
             string customGitRemoteUrl = CustomGitRemoteTextBox?.Text?.Trim() ?? string.Empty;
             string selectedOwner = OwnerComboBox?.SelectedItem as string ?? string.Empty;
 
+            _creationCancellation?.Dispose();
+            _creationCancellation = new CancellationTokenSource();
+            var cancellationToken = _creationCancellation.Token;
             SetCreationState(true);
             ErrorBanner.IsOpen = false;
             await Task.Yield();
 
-            await Task.Run(async () =>
+            if (_isEditMode)
             {
-                if (_isEditMode)
-                {
-                    ResultTemplate = await _templateService.UpdateCustomTemplateAsync(
-                        _editingTemplate!,
-                        description,
-                        version,
-                        _customImagePath,
-                        _removeExistingImage,
-                        templateTags);
-                }
-                else
-                {
-                    ResultTemplate = await _templateService.SaveAsCustomTemplateAsync(
-                        sourceProject!,
-                        name,
-                        description,
-                        version,
-                        _customImagePath,
-                        keepSettings,
-                        includedRootFiles,
-                        replaceProjectName,
-                        templateTags);
-                }
+                ResultTemplate = await _templateService.UpdateCustomTemplateAsync(
+                    _editingTemplate!,
+                    description,
+                    version,
+                    _customImagePath,
+                    _removeExistingImage,
+                    templateTags,
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                ResultTemplate = await _templateService.SaveAsCustomTemplateAsync(
+                    sourceProject!,
+                    name,
+                    description,
+                    version,
+                    _customImagePath,
+                    keepSettings,
+                    includedRootFiles,
+                    replaceProjectName,
+                    templateTags,
+                    cancellationToken);
+            }
 
-                if (ResultTemplate is not null && providerTag != "none")
-                {
-                    var remoteUrl = providerTag == "git" ? customGitRemoteUrl : string.Empty;
-                    string? credentialUser = null;
-                    string? credentialPassword = null;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ResultTemplate is not null && providerTag != "none")
+            {
+                var remoteUrl = providerTag == "git" ? customGitRemoteUrl : string.Empty;
+                string? credentialUser = null;
+                string? credentialPassword = null;
 
-                    if (providerTag == "github" || providerTag == "gitlab")
+                if (providerTag == "github" || providerTag == "gitlab")
+                {
+                    var (authOk, primaryUser, _, authError) =
+                        await _sourceControlService.AuthorizeTokenAsync(providerTag, token);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!authOk)
                     {
-                        var (authOk, primaryUser, _, authError) =
-                            await _sourceControlService.AuthorizeTokenAsync(providerTag, token);
-                        if (!authOk)
-                        {
-                            throw new InvalidOperationException(authError);
-                        }
-
-                        var owner = string.IsNullOrWhiteSpace(selectedOwner) ? primaryUser : selectedOwner;
-                        var (createOk, createdRemoteUrl, createError) =
-                            await _sourceControlService.CreateRemoteRepositoryAsync(
-                                providerTag,
-                                token,
-                                primaryUser,
-                                owner,
-                                repoName,
-                                isPrivate,
-                                repoDescription);
-                        if (!createOk || string.IsNullOrWhiteSpace(createdRemoteUrl))
-                        {
-                            throw new InvalidOperationException(createError);
-                        }
-
-                        remoteUrl = createdRemoteUrl;
-                        credentialUser = providerTag == "gitlab" ? "oauth2" : "x-access-token";
-                        credentialPassword = token;
+                        throw new InvalidOperationException(authError);
                     }
 
-                    var (gitOk, gitMessage) = await _gitService.InitAndSetupUnityGitAsync(
-                        ResultTemplate.TemplateFolderPath,
-                        remoteUrl,
-                        defaultBranch,
-                        enableLfs,
-                        pushAllChanges: true,
-                        credentialUser,
-                        credentialPassword);
-                    if (!gitOk)
+                    var owner = string.IsNullOrWhiteSpace(selectedOwner) ? primaryUser : selectedOwner;
+                    var (createOk, createdRemoteUrl, createError) =
+                        await _sourceControlService.CreateRemoteRepositoryAsync(
+                            providerTag,
+                            token,
+                            primaryUser,
+                            owner,
+                            repoName,
+                            isPrivate,
+                            repoDescription);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!createOk || string.IsNullOrWhiteSpace(createdRemoteUrl))
                     {
-                        throw new InvalidOperationException(gitMessage);
+                        throw new InvalidOperationException(createError);
                     }
+
+                    remoteUrl = createdRemoteUrl;
+                    credentialUser = providerTag == "gitlab" ? "oauth2" : "x-access-token";
+                    credentialPassword = token;
                 }
-            });
+
+                var (gitOk, gitMessage) = await _gitService.InitAndSetupUnityGitAsync(
+                    ResultTemplate.TemplateFolderPath,
+                    remoteUrl,
+                    defaultBranch,
+                    enableLfs,
+                    pushAllChanges: true,
+                    credentialUser,
+                    credentialPassword);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!gitOk)
+                {
+                    throw new InvalidOperationException(gitMessage);
+                }
+            }
 
             if (ResultTemplate is null)
             {
@@ -1111,17 +1120,34 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
                     : "Could not save custom template. Please verify project files and try again.";
                 ErrorBanner.IsOpen = true;
             }
+            else
+            {
+                args.Cancel = false;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            args.Cancel = true;
+            ErrorBanner.Title = _isEditMode ? "Update canceled" : "Creation canceled";
+            ErrorBanner.Message = _isEditMode
+                ? "The template update was canceled."
+                : "Template creation was canceled.";
+            ErrorBanner.Severity = InfoBarSeverity.Warning;
+            ErrorBanner.IsOpen = true;
         }
         catch (Exception ex)
         {
             args.Cancel = true;
             ErrorBanner.Title = _isEditMode ? "Template update failed" : "Template creation failed";
             ErrorBanner.Message = ex.Message;
+            ErrorBanner.Severity = InfoBarSeverity.Error;
             ErrorBanner.IsOpen = true;
         }
         finally
         {
             SetCreationState(false);
+            _creationCancellation?.Dispose();
+            _creationCancellation = null;
             deferral.Complete();
         }
     }
@@ -1134,15 +1160,25 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
     private void SetCreationState(bool isBusy)
     {
         _isBusy = isBusy;
+        DialogSubtitleTextBlock.Visibility = isBusy ? Visibility.Collapsed : Visibility.Visible;
+        DialogContentScrollViewer.Visibility = isBusy ? Visibility.Collapsed : Visibility.Visible;
         SavingProgressPanel.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
         SavingProgressRing.IsActive = isBusy;
         if (isBusy)
         {
             PrimaryButtonText = _isEditMode ? "Updating..." : "Creating...";
+            SavingTitleTextBlock.Text = _isEditMode ? "Updating template..." : "Creating template...";
+            SavingStatusTextBlock.Text = _isEditMode
+                ? "Updating the template package and metadata."
+                : "Packaging project assets and settings into custom template storage.";
+            CloseButtonText = "Cancel";
+            DefaultButton = ContentDialogButton.Close;
         }
         else
         {
             PrimaryButtonText = _isEditMode ? "Update" : "Create";
+            CloseButtonText = "Cancel";
+            DefaultButton = ContentDialogButton.Primary;
         }
         IsPrimaryButtonEnabled = false;
         IsSecondaryButtonEnabled = !isBusy && !_isStep1;
@@ -1150,5 +1186,40 @@ public sealed partial class SaveProjectAsTemplateDialog : ContentDialog
         {
             ValidateInput();
         }
+    }
+
+    private void OnCloseButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        if (!_isBusy)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        RequestCreationCancellation();
+    }
+
+    private void OnDialogClosing(ContentDialog sender, ContentDialogClosingEventArgs args)
+    {
+        if (!_isBusy)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        RequestCreationCancellation();
+    }
+
+    private void RequestCreationCancellation()
+    {
+        if (_creationCancellation is null || _creationCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        SavingTitleTextBlock.Text = "Canceling...";
+        SavingStatusTextBlock.Text = "Stopping template creation and removing incomplete files.";
+        CloseButtonText = "Canceling...";
+        _creationCancellation.Cancel();
     }
 }

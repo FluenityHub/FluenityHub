@@ -90,19 +90,13 @@
             x:Name="OperationPanel"
             Spacing="16"
             Visibility="Collapsed">
-            <StackPanel Spacing="4">
-                <TextBlock
-                    x:Name="OperationHeadingTextBlock"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Preparing project files" />
-                <TextBlock
-                    x:Name="OperationDescriptionTextBlock"
-                    AutomationProperties.LiveSetting="Polite"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource BodyTextBlockStyle}"
-                    Text="Calculating the files to copy..."
-                    TextWrapping="Wrap" />
-            </StackPanel>
+            <TextBlock
+                x:Name="OperationDescriptionTextBlock"
+                AutomationProperties.LiveSetting="Polite"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="Calculating the files to copy..."
+                TextWrapping="Wrap" />
 
             <ProgressBar
                 x:Name="OperationProgressBar"

@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using FluenityHub_WinUIHost.Models;
 
@@ -213,12 +214,14 @@ public sealed class TemplateService
         bool keepProjectSettings,
         List<string> includedRootFiles,
         bool replaceProjectName,
-        IEnumerable<string>? tags = null)
+        IEnumerable<string>? tags = null,
+        CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (sourceProject is null || !Directory.Exists(sourceProject.Path)) return null;
                 if (TemplateNameExists(name)) return null;
 
@@ -329,7 +332,9 @@ public sealed class TemplateService
                             archiveImageName,
                             keepProjectSettings,
                             resolvedRootFiles,
-                            replaceProjectName);
+                            replaceProjectName,
+                            cancellationToken);
+                        cancellationToken.ThrowIfCancellationRequested();
                         File.Move(temporaryTgzPath, tgzPath, overwrite: true);
                     }
                     finally
@@ -387,7 +392,6 @@ public sealed class TemplateService
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"SaveAsCustomTemplateAsync failed: {ex}");
                 try
                 {
                     var slug = MakeSlug(name);
@@ -398,9 +402,16 @@ public sealed class TemplateService
                     }
                 }
                 catch { }
+
+                if (ex is OperationCanceledException)
+                {
+                    throw;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"SaveAsCustomTemplateAsync failed: {ex}");
                 return null;
             }
-        });
+        }, cancellationToken);
     }
 
     public async Task<CustomTemplateInfo?> UpdateCustomTemplateAsync(
@@ -410,12 +421,14 @@ public sealed class TemplateService
         string? replacementImagePath,
         bool removeImage,
         IEnumerable<string>? tags = null,
-        bool rewriteArchive = true)
+        bool rewriteArchive = true,
+        CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (template is null ||
                     string.IsNullOrWhiteSpace(template.TemplateFolderPath) ||
                     !Directory.Exists(template.TemplateFolderPath))
@@ -516,7 +529,8 @@ public sealed class TemplateService
                         packageJsonContent,
                         slug,
                         archiveImageSourcePath,
-                        string.IsNullOrWhiteSpace(updatedImagePath) ? string.Empty : Path.GetFileName(updatedImagePath));
+                        string.IsNullOrWhiteSpace(updatedImagePath) ? string.Empty : Path.GetFileName(updatedImagePath),
+                        cancellationToken);
                 }
 
                 if (!string.IsNullOrWhiteSpace(replacementImagePath) &&
@@ -550,10 +564,15 @@ public sealed class TemplateService
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException)
+                {
+                    throw;
+                }
+
                 System.Diagnostics.Debug.WriteLine($"UpdateCustomTemplateAsync failed: {ex}");
                 return null;
             }
-        });
+        }, cancellationToken);
     }
 
     public async Task<bool> CreateProjectFromTemplateAsync(CustomTemplateInfo template, string targetProjectPath, string targetEditorVersion)
@@ -838,8 +857,10 @@ public sealed class TemplateService
         string imageEntryFileName,
         bool keepProjectSettings,
         IReadOnlyList<RootFileCandidate> rootFiles,
-        bool replaceProjectName)
+        bool replaceProjectName,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var targetStream = new FileStream(
             outputTgzPath,
             FileMode.CreateNew,
@@ -847,7 +868,7 @@ public sealed class TemplateService
             FileShare.None,
             bufferSize: 1024 * 1024,
             FileOptions.SequentialScan);
-        using var gzipStream = new GZipStream(targetStream, CompressionLevel.Optimal, leaveOpen: false);
+        using var gzipStream = new GZipStream(targetStream, CompressionLevel.Fastest, leaveOpen: false);
         using var tarWriter = new TarWriter(gzipStream, TarEntryFormat.Pax, leaveOpen: false);
 
         WriteMemoryEntry(
@@ -859,19 +880,20 @@ public sealed class TemplateService
             !string.IsNullOrWhiteSpace(imageEntryFileName) &&
             File.Exists(imageSourcePath))
         {
-            WriteFileEntry(tarWriter, imageSourcePath, $"package/{imageEntryFileName}");
+            WriteFileEntry(tarWriter, imageSourcePath, $"package/{imageEntryFileName}", cancellationToken);
         }
 
-        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Assets"), "Assets");
-        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Packages"), "Packages");
+        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Assets"), "Assets", cancellationToken);
+        WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Packages"), "Packages", cancellationToken);
         if (keepProjectSettings)
         {
-            WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "ProjectSettings"), "ProjectSettings");
+            WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "ProjectSettings"), "ProjectSettings", cancellationToken);
         }
 
         var sourceProjectName = Path.GetFileName(Path.TrimEndingDirectorySeparator(projectPath));
         foreach (var rootFile in rootFiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var entryName = $"package/ProjectData~/{rootFile.FileName}";
             if (replaceProjectName && TryGetTokenizedRootFile(rootFile, sourceProjectName, out var transformedBytes))
             {
@@ -879,30 +901,41 @@ public sealed class TemplateService
             }
             else
             {
-                WriteFileEntry(tarWriter, rootFile.SourcePath, entryName);
+                WriteFileEntry(tarWriter, rootFile.SourcePath, entryName, cancellationToken);
             }
         }
     }
 
-    private static void WriteProjectDirectory(TarWriter writer, string sourceDirectory, string archiveDirectory)
+    private static void WriteProjectDirectory(
+        TarWriter writer,
+        string sourceDirectory,
+        string archiveDirectory,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var root = new DirectoryInfo(sourceDirectory);
         if (!root.Exists || root.Attributes.HasFlag(FileAttributes.ReparsePoint))
         {
             return;
         }
 
-        WriteProjectDirectory(writer, root, archiveDirectory);
+        WriteProjectDirectory(writer, root, archiveDirectory, cancellationToken);
     }
 
-    private static void WriteProjectDirectory(TarWriter writer, DirectoryInfo directory, string archiveDirectory)
+    private static void WriteProjectDirectory(
+        TarWriter writer,
+        DirectoryInfo directory,
+        string archiveDirectory,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         FileInfo[] files;
         try { files = directory.GetFiles(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
 
         foreach (var file in files.OrderBy(file => file.Name, StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (file.Name.StartsWith('.') ||
                 file.Name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
                 file.Attributes.HasFlag(FileAttributes.ReparsePoint))
@@ -910,7 +943,11 @@ public sealed class TemplateService
                 continue;
             }
 
-            WriteFileEntry(writer, file.FullName, $"package/ProjectData~/{archiveDirectory}/{file.Name}");
+            WriteFileEntry(
+                writer,
+                file.FullName,
+                $"package/ProjectData~/{archiveDirectory}/{file.Name}",
+                cancellationToken);
         }
 
         DirectoryInfo[] subdirectories;
@@ -919,12 +956,17 @@ public sealed class TemplateService
 
         foreach (var subdirectory in subdirectories.OrderBy(directory => directory.Name, StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (ShouldSkipTemplateDirectory(subdirectory))
             {
                 continue;
             }
 
-            WriteProjectDirectory(writer, subdirectory, $"{archiveDirectory}/{subdirectory.Name}");
+            WriteProjectDirectory(
+                writer,
+                subdirectory,
+                $"{archiveDirectory}/{subdirectory.Name}",
+                cancellationToken);
         }
     }
 
@@ -940,8 +982,13 @@ public sealed class TemplateService
            directory.Name.Equals(".vs", StringComparison.OrdinalIgnoreCase) ||
            directory.Name.Equals(".idea", StringComparison.OrdinalIgnoreCase);
 
-    private static void WriteFileEntry(TarWriter writer, string sourcePath, string entryName)
+    private static void WriteFileEntry(
+        TarWriter writer,
+        string sourcePath,
+        string entryName,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         FileStream sourceStream;
         try
         {
@@ -967,6 +1014,7 @@ public sealed class TemplateService
                 ModificationTime = File.GetLastWriteTimeUtc(sourcePath)
             };
             writer.WriteEntry(entry);
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
@@ -1021,8 +1069,10 @@ public sealed class TemplateService
         string packageJsonContent,
         string slug,
         string imageSourcePath,
-        string imageEntryFileName)
+        string imageEntryFileName,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var tarballDirectory = Path.GetDirectoryName(tarballPath)
             ?? throw new InvalidOperationException("The template archive has no parent folder.");
         var temporaryTgzPath = Path.Combine(
@@ -1041,7 +1091,7 @@ public sealed class TemplateService
                 FileShare.None,
                 bufferSize: 1024 * 1024,
                 FileOptions.SequentialScan))
-            using (var outputGzip = new GZipStream(targetFile, CompressionLevel.Optimal))
+            using (var outputGzip = new GZipStream(targetFile, CompressionLevel.Fastest))
             using (var writer = new TarWriter(outputGzip, TarEntryFormat.Pax, leaveOpen: false))
             {
                 var manifestBytes = Encoding.UTF8.GetBytes(packageJsonContent);
@@ -1061,6 +1111,7 @@ public sealed class TemplateService
 
                 while (reader.GetNextEntry() is { } entry)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var entryName = entry.Name.Replace('\\', '/');
                     if (entryName.Equals("package/package.json", StringComparison.OrdinalIgnoreCase) ||
                         entryName.Equals("package/.attestation.p7m", StringComparison.OrdinalIgnoreCase) ||
@@ -1069,12 +1120,13 @@ public sealed class TemplateService
                         continue;
                     }
 
-                    using var seekableData = CreateSeekableTarEntryDataStream(entry);
+                    using var seekableData = CreateSeekableTarEntryDataStream(entry, cancellationToken);
                     var outputEntry = CloneAsPaxEntry(entry, seekableData);
                     writer.WriteEntry(outputEntry);
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryTgzPath, tarballPath, overwrite: true);
         }
         finally
@@ -1082,7 +1134,9 @@ public sealed class TemplateService
             if (File.Exists(temporaryTgzPath)) File.Delete(temporaryTgzPath);
         }
     }
-    private static Stream? CreateSeekableTarEntryDataStream(TarEntry entry)
+    private static Stream? CreateSeekableTarEntryDataStream(
+        TarEntry entry,
+        CancellationToken cancellationToken)
     {
         if (entry.DataStream is null)
         {
@@ -1114,7 +1168,13 @@ public sealed class TemplateService
 
         try
         {
-            entry.DataStream.CopyTo(buffer);
+            var copyBuffer = new byte[1024 * 1024];
+            int bytesRead;
+            while ((bytesRead = entry.DataStream.Read(copyBuffer, 0, copyBuffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                buffer.Write(copyBuffer, 0, bytesRead);
+            }
             buffer.Position = 0;
             return buffer;
         }

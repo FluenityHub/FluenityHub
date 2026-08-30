@@ -23,7 +23,6 @@ public sealed partial class ProjectCopyDialog : ContentDialog
     private readonly ProjectCopyMode _mode;
     private readonly Func<ProjectCopyRequest, IProgress<ProjectCopyProgress>, CancellationToken, Task> _operation;
     private readonly string _actionText;
-    private readonly string _operationHeading;
     private CancellationTokenSource? _operationCancellation;
     private bool _isOperating;
     private bool _isResultState;
@@ -47,7 +46,6 @@ public sealed partial class ProjectCopyDialog : ContentDialog
             case ProjectCopyMode.Backup:
                 Title = $"Back up {project.Title}";
                 _actionText = "Back up";
-                _operationHeading = "Creating project backup";
                 DescriptionTextBlock.Text =
                     "Create a recoverable copy without Unity's generated cache folders. The original project will not be changed.";
                 DestinationTextBox.Text = ProjectBackupService.DefaultBackupRoot;
@@ -59,7 +57,6 @@ public sealed partial class ProjectCopyDialog : ContentDialog
             case ProjectCopyMode.Clone:
                 Title = $"Clone {project.Title}";
                 _actionText = "Clone";
-                _operationHeading = "Cloning project";
                 DescriptionTextBlock.Text =
                     "Create an independent working copy and add it to the project list when complete.";
                 DestinationTextBox.Text = Path.GetDirectoryName(project.Path) ?? string.Empty;
@@ -71,7 +68,6 @@ public sealed partial class ProjectCopyDialog : ContentDialog
             case ProjectCopyMode.Restore:
                 Title = $"Restore {project.Title} as a new project";
                 _actionText = "Restore";
-                _operationHeading = "Restoring project backup";
                 DescriptionTextBlock.Text =
                     "Restore this backup into a new folder. The original project and backup will remain unchanged.";
                 DestinationTextBox.Text = Path.GetDirectoryName(project.Path) ?? string.Empty;
@@ -228,7 +224,6 @@ public sealed partial class ProjectCopyDialog : ContentDialog
 
         SetupPanel.Visibility = Visibility.Collapsed;
         OperationPanel.Visibility = Visibility.Visible;
-        OperationHeadingTextBlock.Text = _operationHeading;
         OperationDescriptionTextBlock.Text = "Calculating the files to copy...";
         OperationCurrentItemTextBlock.Text = "Waiting for file information...";
         OperationMetricsTextBlock.Text = string.Empty;

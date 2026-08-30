@@ -10,7 +10,9 @@
     xmlns:models="using:FluenityHub_WinUIHost.Models"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     Title="Save project as custom template"
+    CloseButtonClick="OnCloseButtonClick"
     CloseButtonText="Cancel"
+    Closing="OnDialogClosing"
     DefaultButton="Primary"
     PrimaryButtonClick="OnPrimaryButtonClick"
     PrimaryButtonText="Next"
@@ -283,49 +285,63 @@
                                     Style="{StaticResource CaptionTextBlockStyle}"
                                     Text="Select files from the source project's root to bundle with the template." />
 
-                                <!-- Selected Root Files Tags -->
-                                <ListView
-                                    x:Name="SelectedRootFilesListView"
-                                    MaxHeight="100"
+                                <ItemsRepeater
+                                    x:Name="SelectedRootFilesRepeater"
                                     Margin="0,4,0,0"
-                                    HorizontalContentAlignment="Stretch"
-                                    SelectionMode="None"
                                     Visibility="Collapsed">
-                                    <ListView.ItemContainerStyle>
-                                        <Style TargetType="ListViewItem">
-                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                            <Setter Property="Padding" Value="0" />
-                                        </Style>
-                                    </ListView.ItemContainerStyle>
-                                    <ListView.ItemTemplate>
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout />
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
                                         <DataTemplate x:DataType="x:String">
-                                            <Grid
-                                                Padding="8,4"
-                                                ColumnSpacing="8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock
-                                                    VerticalAlignment="Center"
-                                                    Text="{x:Bind}"
-                                                    TextTrimming="CharacterEllipsis" />
-                                                <Button
-                                                    Grid.Column="1"
-                                                    Width="28"
-                                                    Height="28"
-                                                    Padding="0"
-                                                    AutomationProperties.Name="Remove included root file"
-                                                    Click="OnRemoveRootFileClick"
-                                                    Style="{StaticResource SubtleButtonStyle}"
-                                                    Tag="{x:Bind}"
-                                                    ToolTipService.ToolTip="Remove file">
-                                                    <FontIcon FontSize="11" Glyph="&#xE711;" />
-                                                </Button>
-                                            </Grid>
+                                            <ItemContainer
+                                                HorizontalContentAlignment="Stretch"
+                                                AutomationProperties.Name="{x:Bind}">
+                                                <ItemContainer.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuFlyoutItem
+                                                            Click="OnRemoveRootFileClick"
+                                                            Tag="{x:Bind}"
+                                                            Text="Remove file">
+                                                            <MenuFlyoutItem.Icon>
+                                                                <FontIcon Glyph="&#xE711;" />
+                                                            </MenuFlyoutItem.Icon>
+                                                        </MenuFlyoutItem>
+                                                    </MenuFlyout>
+                                                </ItemContainer.ContextFlyout>
+                                                <ItemContainer.Resources>
+                                                    <StaticResource
+                                                        x:Key="ItemContainerPointerOverBackground"
+                                                        ResourceKey="ControlFillColorSecondaryBrush" />
+                                                </ItemContainer.Resources>
+                                                <Grid
+                                                    Padding="8,4"
+                                                    ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock
+                                                        VerticalAlignment="Center"
+                                                        Text="{x:Bind}"
+                                                        TextTrimming="CharacterEllipsis" />
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        Width="28"
+                                                        Height="28"
+                                                        Padding="0"
+                                                        AutomationProperties.Name="Remove included root file"
+                                                        Click="OnRemoveRootFileClick"
+                                                        Style="{StaticResource SubtleButtonStyle}"
+                                                        Tag="{x:Bind}"
+                                                        ToolTipService.ToolTip="Remove file">
+                                                        <FontIcon FontSize="11" Glyph="&#xE711;" />
+                                                    </Button>
+                                                </Grid>
+                                            </ItemContainer>
                                         </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
                             </StackPanel>
 
                             <!-- Replace source project name with placeholder -->
