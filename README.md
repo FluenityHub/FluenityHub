@@ -19,6 +19,8 @@ FluenityHub is a native Windows application for managing Unity projects, Editor 
 
 Don't forget to raise an [issue or feedback](https://github.com/FluenityHub/FluenityHub/issues/new/choose) if you have any!
 
+Virus Total Check: [Virus Total Result](https://www.virustotal.com/gui/file/811d92aa0d23c3bab3a2727901c02898c98ea65cf071bc58a258e5ef771ca891?nocache=1)
+
 ## Requirements
 
 - Windows 10 version 1809 or later. Windows 11 is recommended
