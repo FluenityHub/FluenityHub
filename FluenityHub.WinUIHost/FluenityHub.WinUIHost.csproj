@@ -20,6 +20,7 @@
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <EnableWinAppRunSupport>true</EnableWinAppRunSupport>
     <AssemblyName>FluenityHub</AssemblyName>
+    <Version>1.0.0</Version>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Win32Icon>Assets\AppIcon.ico</Win32Icon>
     <Title>FluenityHub</Title>
