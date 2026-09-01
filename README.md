@@ -1,4 +1,12 @@
-# FluenityHub
+![7f0f5f67-7145-48a7-8052-c3714758118b](https://github.com/user-attachments/assets/79b3c6d8-631a-49d8-ac13-86676dbc4323)
+
+<div align="center">
+  <h1 align="center">
+    <br/>
+    FluenityHub
+    <br/>
+  </h1>
+</div>
 
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="License: GPL v3"></a>
