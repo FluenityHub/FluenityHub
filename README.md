@@ -3,7 +3,9 @@
 
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="License: GPL v3"></a>
-  <a href="https://www.microsoft.com/windows/windows-11"><img src="https://custom-icon-badges.demolab.com/badge/Windows%2011-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows"></a>
+  <a href="https://www.microsoft.com/windows"><img src="https://custom-icon-badges.demolab.com/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows">
+</a>
+
 </div>
 
 <div align="center">
