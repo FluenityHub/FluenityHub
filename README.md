@@ -1,6 +1,5 @@
 # FluenityHub
 
-
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="License: GPL v3"></a>
   <a href="https://www.microsoft.com/windows"><img src="https://custom-icon-badges.demolab.com/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows">
@@ -12,6 +11,8 @@
   <a href="https://github.com/FluenityHub/FluenityHub/releases"><img src="https://img.shields.io/github/downloads/FluenityHub/FluenityHub/total?style=flat-square&logo=github" alt="Total Downloads"></a>
   <a href="https://github.com/FluenityHub/FluenityHub/releases/latest"><img src="https://img.shields.io/github/v/release/FluenityHub/FluenityHub?style=flat-square&logo=github" alt="Latest Release"></a>
 </div>
+
+<p align="center">Don't forget to give a star 🌟 to get notified about updates!</p>
 
 FluenityHub is a native Windows application for managing Unity projects, Editor installations, modules, templates, backups, source-control integrations, and Unity licensing workflows. Built with WinUI 3 and the Windows App SDK.
 
