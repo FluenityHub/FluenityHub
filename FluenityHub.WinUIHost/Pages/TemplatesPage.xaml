@@ -67,7 +67,11 @@
                     PlaceholderText="Search templates..."
                     QueryIcon="Find"
                     TextChanged="OnSearchTextChanged"
-                    UpdateTextOnSelect="False" />
+                    UpdateTextOnSelect="False" >
+                        <AutoSuggestBox.KeyboardAccelerators>
+                        <KeyboardAccelerator x:Name="SearchKeyboardAccelerator" Key="F" Modifiers="Control" IsEnabled="False" Invoked="OnSearchAccelerator" />
+                        </AutoSuggestBox.KeyboardAccelerators>
+                    </AutoSuggestBox>
 
                 <Button
                     Height="32"
@@ -255,7 +259,7 @@
                                     <MenuFlyoutItem
                                         Click="OnShowInExplorerClick"
                                         Tag="{x:Bind}"
-                                        Text="Show in File Explorer">
+                                        Text="Open in File Explorer">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE8B7;" />
                                         </MenuFlyoutItem.Icon>
@@ -499,7 +503,7 @@
                                                     <MenuFlyoutItem
                                                         Click="OnShowInExplorerClick"
                                                         Tag="{x:Bind}"
-                                                        Text="Show in File Explorer">
+                                                        Text="Open in File Explorer">
                                                         <MenuFlyoutItem.Icon>
                                                             <FontIcon Glyph="&#xE8B7;" />
                                                         </MenuFlyoutItem.Icon>
@@ -561,7 +565,7 @@
                     HorizontalAlignment="Center"
                     FontSize="44"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    Glyph="&#xF158;" />
+                    Glyph="&#xF0E2;" />
                 <TextBlock
                     x:Name="EmptyStateTitle"
                     HorizontalAlignment="Center"

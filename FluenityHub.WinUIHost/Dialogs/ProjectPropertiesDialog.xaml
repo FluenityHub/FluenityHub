@@ -1,0 +1,18 @@
+<ContentDialog x:Class="FluenityHub_WinUIHost.Dialogs.ProjectPropertiesDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Project properties" CloseButtonText="Close" Style="{StaticResource DefaultContentDialogStyle}">
+    <ScrollViewer MaxHeight="480" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel MinWidth="440" Spacing="16">
+            <StackPanel Spacing="4"><TextBlock Text="Name" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><TextBlock Text="{x:Bind Project.Title}" TextWrapping="Wrap" IsTextSelectionEnabled="True" /></StackPanel>
+            <StackPanel Spacing="4"><TextBlock Text="Unity Editor" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><TextBlock Text="{x:Bind Project.Version}" IsTextSelectionEnabled="True" /><HyperlinkButton Content="Release notes" Click="OnReleaseNotes" Padding="0,4" HorizontalAlignment="Left" AutomationProperties.Name="Open Editor release notes" /></StackPanel>
+            <StackPanel Spacing="4"><TextBlock Text="Location" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><TextBlock Text="{x:Bind Project.Path}" TextWrapping="Wrap" IsTextSelectionEnabled="True" /></StackPanel>
+            <StackPanel Spacing="4"><TextBlock Text="Source control" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><TextBlock Text="{x:Bind SourceControl}" TextWrapping="Wrap" IsTextSelectionEnabled="True" /></StackPanel>
+            <StackPanel Spacing="4"><TextBlock Text="Tags" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><TextBlock Text="{x:Bind Tags}" TextWrapping="Wrap" /></StackPanel>
+            <ProgressRing x:Name="DetailsProgress" Width="24" Height="24" HorizontalAlignment="Left" IsActive="True" AutomationProperties.Name="Reading project details" />
+            <TextBlock x:Name="DetailsText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+            <Button x:Name="RemoteSizeButton" Content="Check remote repository size" Click="OnRemoteSize" AutomationProperties.Name="Check remote repository size" />
+            <TextBlock x:Name="RemoteSizeText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

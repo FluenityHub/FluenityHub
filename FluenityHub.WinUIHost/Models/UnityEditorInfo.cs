@@ -21,6 +21,7 @@ public sealed class UnityEditorInfo
         var productVersion = components[0] switch
         {
             "6000" => components[1] == "0" ? "6" : $"6.{components[1]}",
+            "7000" => components[1] == "0" ? "7" : $"7.{components[1]}",
             _ => $"{components[0]}.{components[1]}"
         };
         var channel = version.Contains('a', StringComparison.OrdinalIgnoreCase)

@@ -14,7 +14,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />  <PropertyGroup>
     <WindowsSdkNuGetRoot>$(MSBuildThisFileDirectory)..\..\.tools\native-sdk</WindowsSdkNuGetRoot>
-    <WindowsSdkPackageVersion>10.0.28000.2526</WindowsSdkPackageVersion>
+    <WindowsSdkPackageVersion>10.0.28000.2957</WindowsSdkPackageVersion>
   </PropertyGroup>
   <Import Project="$(WindowsSdkNuGetRoot)\microsoft.windows.sdk.cpp\$(WindowsSdkPackageVersion)\build\Microsoft.Windows.SDK.cpp.props" />
   <Import Project="$(WindowsSdkNuGetRoot)\microsoft.windows.sdk.cpp.$(Platform)\$(WindowsSdkPackageVersion)\build\native\Microsoft.Windows.SDK.cpp.$(Platform).props" />

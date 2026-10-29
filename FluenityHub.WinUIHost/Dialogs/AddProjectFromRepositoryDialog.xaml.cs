@@ -27,6 +27,8 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
     private string? _appliedSavedTokenProvider;
     private string _genericGitBaseLocation = string.Empty;
     private string _lastSuggestedGitLocation = string.Empty;
+    private CancellationTokenSource? _cloneCancellation;
+    private readonly CancellationTokenSource _browserCancellation = new();
 
     public AddProjectFromRepositoryDialog()
     {
@@ -34,6 +36,14 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
         SetDefaultLocation();
         UpdateInfoTooltips();
         AutoFillSavedToken();
+        Closed += (_, _) => { _authorizationRequestId++; _browserCancellation.Cancel(); _browserCancellation.Dispose(); };
+        Closing += (_, args) =>
+        {
+            if (_cloneCancellation is null) return;
+            args.Cancel = true;
+            _cloneCancellation.Cancel();
+            CloseButtonText = "Canceling...";
+        };
     }
 
     private void UpdateInfoTooltips()
@@ -50,6 +60,33 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
                 ToolTipService.SetToolTip(TokenInfoButton, "Your token is stored securely in your OS keychain.\n\nFor Classic Tokens:\n- Select repo scope\n\nFor Fine-grained Tokens:\n- Grant repository Contents read access.\n\nThese allow FluenityHub to list and clone your repositories via HTTPS.");
             }
         }
+    }
+
+    private async void OnBrowserSignInClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        button.IsEnabled = false;
+        var provider = SelectedProvider;
+        var request = ++_authorizationRequestId;
+        try
+        {
+            var credential = await GitCredentialManagerService.GetAsync(provider, null, true, _browserCancellation.Token);
+            if (request != _authorizationRequestId) return;
+            if (credential is null) throw new IOException("Git sign-in was not completed. Check that Git Credential Manager is installed.");
+            var authorization = await _sourceControlService.AuthorizeTokenAsync(provider, credential.Password);
+            if (request != _authorizationRequestId) return;
+            if (!authorization.Success) throw new IOException(authorization.ErrorMessage);
+            GitCredentialManagerService.SetAccount(provider, null, credential.UserName);
+            _currentToken = string.Empty;
+            _isAuthorized = true;
+            TokenUnlinkedPanel.Visibility = Visibility.Collapsed;
+            TokenLinkedPanel.Visibility = Visibility.Visible;
+            TokenUserTextBlock.Text = $"Connected as @{authorization.PrimaryOwner}";
+            await LoadRepositoriesAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (request == _authorizationRequestId) ShowStatus(ex.Message, InfoBarSeverity.Error); }
+        finally { button.IsEnabled = true; }
     }
 
     private void SetDefaultLocation()
@@ -523,7 +560,10 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
 
             ShowStatus($"Cloning repository ({selectedBranch})... Please wait.", InfoBarSeverity.Informational);
 
-            var (cloneSuccess, cloneMsg) = await GitService.CloneRepositoryAsync(cloneUrl, targetLocation, selectedBranch);
+            _cloneCancellation = new CancellationTokenSource();
+            IsPrimaryButtonEnabled = ProviderComboBox.IsEnabled = RepositoryComboBox.IsEnabled = BranchComboBox.IsEnabled = LocationTextBox.IsEnabled = false;
+            var progress = new Progress<string>(message => ShowStatus(message, InfoBarSeverity.Informational));
+            var (cloneSuccess, cloneMsg) = await GitService.CloneRepositoryAsync(cloneUrl, targetLocation, selectedBranch, _cloneCancellation.Token, progress);
             if (!cloneSuccess)
             {
                 args.Cancel = true;
@@ -545,6 +585,11 @@ public sealed partial class AddProjectFromRepositoryDialog : ContentDialog
         }
         finally
         {
+            _cloneCancellation?.Dispose();
+            _cloneCancellation = null;
+            ProviderComboBox.IsEnabled = RepositoryComboBox.IsEnabled = BranchComboBox.IsEnabled = LocationTextBox.IsEnabled = true;
+            CloseButtonText = "Cancel";
+            ValidateInputs();
             deferral.Complete();
         }
     }

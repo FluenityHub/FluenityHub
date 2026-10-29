@@ -11,8 +11,8 @@ set "source=%~dp0FluenityHub.ExplorerCommand"
 set "output=%source%\x64\%~2"
 set "llvm=%root%\.tools\llvm-23.1.0\LLVM"
 set "msvc=%root%\.tools\msvc-14.44\Contents\VC\Tools\MSVC\14.44.35207"
-set "sdk=%root%\.tools\native-sdk\microsoft.windows.sdk.cpp\10.0.28000.2526\c"
-set "sdkx64=%root%\.tools\native-sdk\microsoft.windows.sdk.cpp.x64\10.0.28000.2526\c"
+set "sdk=%root%\.tools\native-sdk\microsoft.windows.sdk.cpp\10.0.28000.2957\c"
+set "sdkx64=%root%\.tools\native-sdk\microsoft.windows.sdk.cpp.x64\10.0.28000.2957\c"
 set "sdkversion=10.0.28000.0"
 
 dotnet restore "%~dp0ExplorerCommandSdk.csproj" --nologo -v:minimal

@@ -45,13 +45,16 @@
             Text="Save an existing project as a custom template to reuse its setup and speed up future project creation."
             TextWrapping="Wrap" />
 
-        <!-- Main Scrollable Content Area -->
-        <ScrollViewer
+        <ScrollView
             x:Name="DialogContentScrollViewer"
             Grid.Row="1"
             MaxHeight="520"
-            HorizontalScrollBarVisibility="Disabled"
-            VerticalScrollBarVisibility="Auto">
+            ContentOrientation="Vertical"
+            HorizontalScrollBarVisibility="Hidden"
+            HorizontalScrollMode="Disabled"
+            IsTabStop="True"
+            VerticalScrollBarVisibility="Auto"
+            VerticalScrollMode="Enabled">
             <StackPanel Spacing="16">
 
                 <!-- STEP 1: TEMPLATE DETAILS -->
@@ -645,7 +648,7 @@
                 </StackPanel>
 
             </StackPanel>
-        </ScrollViewer>
+        </ScrollView>
 
         <!-- Banners -->
         <StackPanel Grid.Row="2" Spacing="8">

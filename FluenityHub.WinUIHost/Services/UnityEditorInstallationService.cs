@@ -13,8 +13,6 @@ public sealed class UnityEditorInstallationService
     private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan TransientInstallerRetryDelay = TimeSpan.FromSeconds(2);
     private const int MaximumInstallAttempts = 4;
-    private const long MinimumFreeDiskSpaceBytes = 10L * 1024 * 1024 * 1024; // 10 GB
-    private const long MinimumSystemTempFreeDiskSpaceBytes = 20L * 1024 * 1024 * 1024; // 20 GB
 
     public async Task<UnityModuleInstallResult> InstallAsync(
         string version,
@@ -661,11 +659,29 @@ public sealed class UnityEditorInstallationService
 
     internal static string? GetEditorInstallStorageError(
         string installRoot,
-        string downloadLocation)
-        => null;
-
-    private static string? CheckDiskSpace(string installRoot, string downloadLocation)
-        => null;
+        string downloadLocation,
+        long installedBytes = 0,
+        long downloadBytes = 0)
+    {
+        var requirements = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, bytes) in new[] { (installRoot, installedBytes), (downloadLocation, downloadBytes) })
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path))
+                ?? throw new IOException("The installation or download drive could not be found.");
+            requirements.TryGetValue(root, out var existing);
+            requirements[root] = checked(existing + Math.Max(0, bytes));
+        }
+        foreach (var (root, required) in requirements)
+        {
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady) return $"The drive {root} is not ready.";
+            var available = drive.AvailableFreeSpace;
+            if (available <= required)
+                return $"Not enough space on {root} The selected components need approximately {required / 1073741824d:0.##} GiB, "
+                    + $"but only {available / 1073741824d:0.##} GiB is available. Choose another install or download location in Settings.";
+        }
+        return null;
+    }
 
     /// <summary>
     /// Deletes cached installer executables for the specified Unity version

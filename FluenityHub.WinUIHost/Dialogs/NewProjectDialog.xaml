@@ -49,7 +49,7 @@
                     <TextBox
                         x:Name="LocationTextBox"
                         AutomationProperties.Name="Location folder path"
-                        PlaceholderText="C:\Users\Username\Documents"
+                        PlaceholderText="Choose a project location"
                         TextChanged="OnInputChanged" />
                     <Button
                         Grid.Column="1"
@@ -153,6 +153,7 @@
 
                     <!-- Personal Access Token (for GitHub & GitLab) -->
                     <StackPanel x:Name="TokenSectionStackPanel" Spacing="6" Visibility="Collapsed">
+                        <Button Content="Sign in with browser" Click="OnBrowserSignInClick" AutomationProperties.Name="Sign in to Git provider with browser" />
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Personal Access Token" />
                             <Button

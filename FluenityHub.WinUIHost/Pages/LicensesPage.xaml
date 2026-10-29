@@ -158,6 +158,16 @@
                 </controls:SettingsCard>
 
                 <controls:SettingsCard
+                    Description="Show a person icon instead of your profile picture or initials throughout FluenityHub. Your name and email stay visible."
+                    Header="Hide profile picture and initials"
+                    HeaderIcon="{ui:FontIcon Glyph=&#xE77B;}">
+                    <ToggleSwitch
+                        x:Name="HideAccountAvatarToggleSwitch"
+                        AutomationProperties.AutomationId="HideAccountAvatarToggleSwitch"
+                        AutomationProperties.Name="Hide profile picture and initials"
+                        Toggled="OnHideAccountAvatarToggled" />
+                </controls:SettingsCard>
+                <controls:SettingsCard
                     Description="Always open Unity Editor in offline mode, even when a Unity account is signed in. Online Unity services will be unavailable."
                     Header="Launch Editor in offline mode"
                     HeaderIcon="{ui:FontIcon Glyph=&#xF158;}">

@@ -13,6 +13,11 @@ namespace FluenityHub_WinUIHost.Pages;
 
 public sealed partial class ProjectsPage : Page
 {
+    private void OnSearchAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Programmatic);
+        args.Handled = true;
+    }
     public static Visibility BoolToVisibility(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility HasGlyphToVisibility(string glyph) => !string.IsNullOrEmpty(glyph) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -42,6 +47,7 @@ public sealed partial class ProjectsPage : Page
     private bool _isSyncingFlyout;
     private bool _isReloadingData;
     private bool _hasCompletedEditorDiscovery;
+    private ProjectListItemViewModel? _contextMenuRow;
     private DateTime _projectStoreChangeStampUtc;
     private sealed record ProjectSourceControlRefresh(
         string ProjectPath,
@@ -65,6 +71,8 @@ public sealed partial class ProjectsPage : Page
     {
         _projectConnectionService = new ProjectConnectionService(_projectService);
         InitializeComponent();
+        Loaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = true;
+        Unloaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = false;
         ReloadData(showSuccessMessage: false);
     }
 
@@ -1429,7 +1437,17 @@ public sealed partial class ProjectsPage : Page
                 return;
             }
 
-            var dialog = new FluenityHub_WinUIHost.Dialogs.NewProjectDialog(installedVersions)
+            string? defaultVersion = null;
+            try
+            {
+                defaultVersion = await UnityEditorPreferenceService.GetDefaultVersionAsync(CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                ShowStatus($"Default Editor could not be loaded: {ex.Message}", InfoBarSeverity.Warning);
+            }
+
+            var dialog = new FluenityHub_WinUIHost.Dialogs.NewProjectDialog(installedVersions, initialVersion: defaultVersion)
             {
                 XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme
@@ -1623,6 +1641,36 @@ public sealed partial class ProjectsPage : Page
             ProjectsListView.SelectedItem = viewModel;
         }
     }
+
+    private void OnProjectContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (sender is not FrameworkElement { DataContext: ProjectListItemViewModel viewModel } element)
+        {
+            return;
+        }
+
+        ProjectsListView.SelectedItem = viewModel;
+        if (_contextMenuRow is not null && _contextMenuRow != viewModel)
+        {
+            _contextMenuRow.IsContextMenuLoaded = false;
+        }
+        _contextMenuRow = viewModel;
+        viewModel.IsContextMenuLoaded = true;
+        if (element.ContextFlyout is not MenuFlyout menu) return;
+
+        if (args.TryGetPosition(element, out var position))
+        {
+            menu.ShowAt(element, position);
+        }
+        else
+        {
+            menu.ShowAt(element);
+        }
+        args.Handled = true;
+    }
+
+    private void OnProjectContextCanceled(UIElement sender, RoutedEventArgs args)
+        => sender.ContextFlyout?.Hide();
 
     public async Task ShowVersionPickerDialog(UnityProjectInfo project)
     {
@@ -2676,6 +2724,12 @@ public sealed partial class ProjectsPage : Page
         };
     }
 
+    private async void OnContextProjectPropertiesClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: ProjectListItemViewModel viewModel })
+            await new ProjectPropertiesDialog(viewModel.Project) { XamlRoot = XamlRoot, RequestedTheme = ActualTheme }.ShowAsync();
+    }
+
     private void OnContextRemoveProjectClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: ProjectListItemViewModel viewModel })
@@ -2818,13 +2872,20 @@ public sealed partial class ProjectsPage : Page
 
     private void OnProjectsListViewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        var selectedProject = GetSelectedProject();
-        if (selectedProject is null) return;
-
         var stateCtrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
         var stateShift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
         bool isCtrl = stateCtrl.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         bool isShift = stateShift.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        if (e.Key == Windows.System.VirtualKey.F && isCtrl)
+        {
+            SearchBox.Focus(FocusState.Programmatic);
+            e.Handled = true;
+            return;
+        }
+
+        var selectedProject = GetSelectedProject();
+        if (selectedProject is null) return;
 
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
@@ -2841,7 +2902,7 @@ public sealed partial class ProjectsPage : Page
             ConfirmAndRemoveProject(selectedProject);
             e.Handled = true;
         }
-        else if (e.Key == Windows.System.VirtualKey.F && isCtrl)
+        else if (e.Key == Windows.System.VirtualKey.D && isCtrl)
         {
             OpenProjectFolder(selectedProject);
             e.Handled = true;

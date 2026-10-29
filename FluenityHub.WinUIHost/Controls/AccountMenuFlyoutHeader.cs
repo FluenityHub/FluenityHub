@@ -22,6 +22,13 @@ public sealed partial class AccountMenuFlyoutHeader : MenuFlyoutItem
             typeof(AccountMenuFlyoutHeader),
             new PropertyMetadata("Not signed in"));
 
+    public static readonly DependencyProperty AvatarDisplayNameProperty =
+        DependencyProperty.Register(
+            nameof(AvatarDisplayName),
+            typeof(string),
+            typeof(AccountMenuFlyoutHeader),
+            new PropertyMetadata(string.Empty));
+
     public static readonly DependencyProperty IsBusyProperty =
         DependencyProperty.Register(
             nameof(IsBusy),
@@ -45,6 +52,12 @@ public sealed partial class AccountMenuFlyoutHeader : MenuFlyoutItem
     {
         get => (string)GetValue(DescriptionProperty);
         set => SetValue(DescriptionProperty, value);
+    }
+
+    public string AvatarDisplayName
+    {
+        get => (string)GetValue(AvatarDisplayNameProperty);
+        set => SetValue(AvatarDisplayNameProperty, value);
     }
 
     public bool IsBusy

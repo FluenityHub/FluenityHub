@@ -1,0 +1,13 @@
+<ContentDialog x:Class="FluenityHub_WinUIHost.Dialogs.InstallEditorFromLinkDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Install Editor from link" PrimaryButtonText="Continue" CloseButtonText="Cancel"
+    DefaultButton="Primary" PrimaryButtonClick="OnContinue" Style="{StaticResource DefaultContentDialogStyle}">
+    <StackPanel MinWidth="420" Spacing="16">
+        <TextBlock Text="Paste an Editor install link supplied by Unity. The Editor is checked with Unity CLI before you review and start the installation. Modules can be added after installation."
+                   TextWrapping="Wrap" />
+        <TextBox x:Name="LinkBox" Header="Unity Editor link" PlaceholderText="unityhub://version/changeset" AutomationProperties.Name="Unity Editor install link" />
+        <ProgressRing x:Name="Progress" Width="24" Height="24" HorizontalAlignment="Left" Visibility="Collapsed" AutomationProperties.Name="Checking Editor install link" />
+        <InfoBar x:Name="StatusBar" IsOpen="False" IsClosable="True" Severity="Error" />
+    </StackPanel>
+</ContentDialog>

@@ -16,7 +16,6 @@ public sealed record UnityEditorLaunchResult(
 /// </summary>
 public sealed class UnityEditorLaunchService
 {
-    private static readonly TimeSpan TokenRefreshWindow = TimeSpan.FromMinutes(5);
     private readonly AppSettingsStore _settingsStore = new();
     private readonly UnityCliAuthService _cliAuthService = new();
 
@@ -71,61 +70,30 @@ public sealed class UnityEditorLaunchService
             return new(false, $"Project path not found: {projectPath}");
         }
         var settings = _settingsStore.Load();
-        UnitySharedAccessToken? sharedToken = null;
-        if (settings.LaunchEditorInOfflineMode)
+        if (!settings.LaunchEditorInOfflineMode)
         {
-            UnityEditorLaunchDiagnostics.Write(
-                "Auth",
-                "Offline Editor mode is enabled in Unity license settings; the active account will not be passed to the Editor.");
-        }
-        else if (UnitySharedAuthService.TryGetActiveAccessToken(out var candidateToken, out _)
-            && candidateToken is not null
-            && TryGetTokenExpiration(candidateToken, out var tokenExpiration)
-            && tokenExpiration > DateTimeOffset.UtcNow + TokenRefreshWindow)
-        {
-            sharedToken = candidateToken;
-            UnityEditorLaunchDiagnostics.Write(
-                "Auth",
-                candidateToken.Expiration is double expiration
-                    ? $"Active account loaded; token expiry={DateTimeOffset.FromUnixTimeMilliseconds((long)expiration):O}."
-                    : "Active account loaded; token expiry was not provided.");
-        }
-        else if (NetworkConnectivityService.Current.CanAttemptInternet)
-        {
-            UnityEditorLaunchDiagnostics.Write(
-                "Auth",
-                "Unity account session is missing or expired; renewing it through Unity CLI before launch.");
-
-            var (refreshedToken, refreshError) = await EnsureSharedAccessTokenAsync(cancellationToken);
-            if (refreshedToken is null)
+            try
             {
-                UnityEditorLaunchDiagnostics.Write("Auth", $"Sign-in failed: {refreshError}");
-                return new(
-                    false,
-                    string.IsNullOrWhiteSpace(refreshError)
-                        ? "Unity sign-in was not completed. Sign in from FluenityHub and retry."
-                        : refreshError);
+                return await LaunchWithCliAsync(editorExecutable, projectPath, targetPlatform, extraArguments, cancellationToken);
             }
-
-            sharedToken = refreshedToken;
-            UnityEditorLaunchDiagnostics.Write("Auth", "Unity account session is ready.");
+            catch (OperationCanceledException)
+            {
+                return new(false, "Opening the Unity project was canceled.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or Win32Exception)
+            {
+                UnityEditorLaunchDiagnostics.Write("Launch", $"Unity CLI handoff failed: {ex.GetType().Name}");
+                return new(false, $"Unable to launch Unity Editor: {ex.Message}");
+            }
         }
-        else
-        {
-            UnityEditorLaunchDiagnostics.Write(
-                "Auth",
-                "No active account session and Windows is offline; launch rejected by Unity license settings.");
-            return new(
-                false,
-                "You're offline and Unity is not signed in. Enable 'Launch Editor in offline mode' in Settings > Unity licenses, or connect to the internet and sign in.");
-        }
+        UnityEditorLaunchDiagnostics.Write("Auth", "Offline Editor mode; no account credential is passed to the Editor.");
 
         UnityLicensingClientSession? licensingSession = null;
         UnityHubIpcGuard? hubIpcGuard = null;
         Process? editorProcess = null;
         try
         {
-            if (!UnityHubIpcGuard.TryAcquire(sharedToken, out hubIpcGuard, out var hubIpcError)
+            if (!UnityHubIpcGuard.TryAcquire(null, out hubIpcGuard, out var hubIpcError)
                 || hubIpcGuard is null)
             {
                 UnityEditorLaunchDiagnostics.Write("HubIPC", $"Failed to start: {hubIpcError}");
@@ -136,7 +104,7 @@ public sealed class UnityEditorLaunchService
 
             var licensingResult = await UnityLicensingClientSession.StartAsync(
                 editorExecutable,
-                sharedToken?.Value,
+                null,
                 cancellationToken);
             licensingSession = licensingResult.Session;
             if (licensingSession is null)
@@ -164,11 +132,6 @@ public sealed class UnityEditorLaunchService
             startInfo.ArgumentList.Add("production");
             startInfo.ArgumentList.Add("-hubSessionId");
             startInfo.ArgumentList.Add(Guid.NewGuid().ToString());
-            if (!string.IsNullOrWhiteSpace(sharedToken?.Value))
-            {
-                startInfo.ArgumentList.Add("-accessToken");
-                startInfo.ArgumentList.Add(sharedToken.Value);
-            }
             startInfo.ArgumentList.Add("-licensingIpc");
             startInfo.ArgumentList.Add(licensingSession.EditorPipeName);
 
@@ -209,9 +172,7 @@ public sealed class UnityEditorLaunchService
             UnityEditorLaunchDiagnostics.Write("Launch", "Editor passed the startup check; services attached.");
             return new(
                 true,
-                sharedToken is not null
-                    ? "Unity Editor is starting with the signed-in Unity account."
-                    : "Unity Editor is starting in offline mode.",
+                "Unity Editor is starting in offline mode.",
                 editorProcess);
         }
         catch (OperationCanceledException)
@@ -242,63 +203,56 @@ public sealed class UnityEditorLaunchService
             $"Unity_{editorVersion}");
     }
 
-    private async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
-        EnsureSharedAccessTokenAsync(CancellationToken cancellationToken)
+    private async Task<UnityEditorLaunchResult> LaunchWithCliAsync(
+        string editorExecutable, string projectPath, string? targetPlatform,
+        string? extraArguments, CancellationToken cancellationToken)
     {
-        var (refreshedToken, refreshError) =
-            await UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken);
-        if (refreshedToken is not null && UnitySharedAuthService.IsAccessTokenUsable(refreshedToken))
+        if (UnityAccountConnectionState.IsDisconnected)
+            return new(false, "Sign in from the account menu, or enable offline Editor mode in Settings > Unity licenses.");
+
+        var account = await _cliAuthService.GetStatusAsync(cancellationToken);
+        if (!account.IsLoggedIn) return new(false, account.Message);
+        var arguments = new List<string> { "open", Path.GetFullPath(projectPath), "--editor-path", Path.GetFullPath(editorExecutable) };
+        if (!string.IsNullOrWhiteSpace(targetPlatform))
         {
-            return (refreshedToken, string.Empty);
+            arguments.Add("--build-target");
+            arguments.Add(targetPlatform);
         }
-
-        if (UnitySharedAuthService.TryGetActiveAccessToken(out var storedToken, out _)
-            && storedToken is not null
-            && UnitySharedAuthService.IsAccessTokenUsable(storedToken))
+        if (!string.IsNullOrWhiteSpace(extraArguments))
         {
-            return (storedToken, string.Empty);
+            arguments.Add("--args");
+            arguments.Add(extraArguments);
         }
-
-        UnityEditorLaunchDiagnostics.Write(
-            "Auth",
-            "Silent renewal was unavailable; starting Unity CLI browser sign-in.");
-        var authState = await _cliAuthService.LoginAsync(cancellationToken);
-        if (!authState.IsLoggedIn)
+        var result = await UnityCliCommandService.RunAsync(arguments, cancellationToken, TimeSpan.FromMinutes(2));
+        if (!result.Succeeded) return new(false, result.Message);
+        Process? editor = null;
+        if (result.Data.ValueKind == System.Text.Json.JsonValueKind.Object
+            && result.Data.TryGetProperty("launchedPid", out var pid) && pid.TryGetInt32(out var id))
         {
-            return (
-                null,
-                string.IsNullOrWhiteSpace(authState.Message)
-                    ? refreshError
-                    : authState.Message);
-        }
-
-        const int maximumAttempts = 25;
-        var lastError = string.IsNullOrWhiteSpace(refreshError)
-            ? "Unity sign-in completed, but its credential was not synchronized. Retry sign-in."
-            : refreshError;
-
-        for (var attempt = 0; attempt < maximumAttempts; attempt++)
-        {
-            if (UnitySharedAuthService.TryGetActiveAccessToken(out var token, out var errorMessage)
-                && token is not null
-                && UnitySharedAuthService.IsAccessTokenUsable(token))
+            try { editor = Process.GetProcessById(id); }
+            catch (ArgumentException) { return new(false, "Unity Editor stopped during startup."); }
+            try
             {
-                return (token, string.Empty);
+                await Task.Delay(TimeSpan.FromMilliseconds(750), cancellationToken);
             }
-
-            if (!string.IsNullOrWhiteSpace(errorMessage))
+            catch (OperationCanceledException)
             {
-                lastError = errorMessage;
+                TryTerminate(editor);
+                editor.Dispose();
+                throw;
             }
-
-            if (attempt < maximumAttempts - 1)
+            if (editor.HasExited)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
+                var exitCode = editor.ExitCode;
+                editor.Dispose();
+                return new(false, $"Unity Editor stopped during startup (exit code {exitCode}). Check the Editor log for details.");
             }
         }
-
-        return (null, lastError);
+        UnityEditorLaunchDiagnostics.Write("Launch", "Unity CLI completed the account and organization handoff.");
+        return new(true, "Unity Editor is starting.", editor);
     }
+
+
     private static IReadOnlyList<string> SplitCommandLine(string? commandLine)
     {
         if (string.IsNullOrWhiteSpace(commandLine))
@@ -344,30 +298,7 @@ public sealed class UnityEditorLaunchService
         }
     }
 
-    private static bool TryGetTokenExpiration(
-        UnitySharedAccessToken token,
-        out DateTimeOffset expiration)
-    {
-        expiration = default;
-        if (token.Expiration is not double value
-            || double.IsNaN(value)
-            || double.IsInfinity(value)
-            || value < long.MinValue
-            || value > long.MaxValue)
-        {
-            return false;
-        }
 
-        try
-        {
-            expiration = DateTimeOffset.FromUnixTimeMilliseconds((long)value);
-            return true;
-        }
-        catch (ArgumentOutOfRangeException)
-        {
-            return false;
-        }
-    }
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern IntPtr CommandLineToArgvW(

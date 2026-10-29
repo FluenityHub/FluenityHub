@@ -247,6 +247,8 @@ internal static partial class ElevatedUnityCliRunner
                 RedirectStandardError = true,
                 RedirectStandardInput = true
             };
+            startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
+            startInfo.ArgumentList.Add("--no-log-proxy");
             foreach (var argument in request.Arguments)
             {
                 startInfo.ArgumentList.Add(argument);

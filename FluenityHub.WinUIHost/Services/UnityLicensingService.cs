@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using FluenityHub_WinUIHost.Models;
 
 namespace FluenityHub_WinUIHost.Services;
@@ -9,12 +10,22 @@ public sealed class UnityLicensingService
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ActivationTimeout = TimeSpan.FromMinutes(2);
 
-    public bool IsClientAvailable => FindLicensingClient() is not null;
+    public bool IsClientAvailable => new UnityCliToolService().GetStatus().IsInstalled || FindLicensingClient() is not null;
 
     public async Task<(bool Succeeded, string Message)> ActivateUlfAsync(
         string? serial,
         CancellationToken cancellationToken = default)
     {
+        if (new UnityCliToolService().GetStatus().IsInstalled)
+        {
+            if (!NetworkConnectivityService.Current.CanAttemptInternet)
+                return (false, NetworkConnectivityService.OfflineMessage);
+            var cliArguments = new List<string> { "license", "activate" };
+            if (string.IsNullOrWhiteSpace(serial)) cliArguments.AddRange(["--personal", "--accept-eula"]);
+            else cliArguments.AddRange(["--serial", serial.Trim()]);
+            var activation = await UnityCliCommandService.RunAsync(cliArguments, cancellationToken, ActivationTimeout);
+            return (activation.Succeeded, activation.Succeeded ? "Unity license activated." : activation.Message);
+        }
         var clientPath = FindLicensingClient();
         if (clientPath is null)
         {
@@ -133,6 +144,31 @@ public sealed class UnityLicensingService
         bool synchronize,
         CancellationToken cancellationToken = default)
     {
+        var cli = new UnityCliToolService().GetStatus();
+        if (cli.IsInstalled)
+        {
+            var result = await UnityCliCommandService.RunAsync(["license", "list"], cancellationToken);
+            if (!result.Succeeded) throw new IOException(result.Message);
+            if (result.Data.ValueKind != JsonValueKind.Array)
+                throw new InvalidDataException("Unity returned unreadable license information.");
+            var cliLicenses = new List<UnityLicenseInfo>();
+            if (result.Succeeded && result.Data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var row in result.Data.EnumerateArray())
+                {
+                    if (row.ValueKind != JsonValueKind.Object) continue;
+                    var fields = row.EnumerateObject()
+                        .Where(p => !IsSensitiveField(p.Name) && p.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
+                        .ToDictionary(p => p.Name, p => p.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+                    var name = FindValue(fields.ToList(), "product", "productName", "name") ?? "Unity license";
+                    var type = FindValue(fields.ToList(), "type", "licenseType") ?? "Active on this device";
+                    cliLicenses.Add(new(CleanLicenseName(name), type, string.Join(Environment.NewLine,
+                        fields.Where(p => p.Value != name && p.Value != type).Select(p => $"{p.Key}: {p.Value}"))));
+                }
+            }
+            return new(true, cli.ExecutablePath ?? string.Empty, $"Unity CLI {cli.Version}", cliLicenses,
+                cliLicenses.Count == 0 ? "No active Unity licenses were found." : $"{cliLicenses.Count} active Unity licenses found.");
+        }
         var clientPath = FindLicensingClient();
         if (clientPath is null)
         {

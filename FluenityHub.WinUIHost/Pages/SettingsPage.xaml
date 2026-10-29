@@ -279,7 +279,7 @@
 
                     <controls:SettingsExpander
                         x:Name="SourceControlSettingsExpander"
-                        Description="Manage your authentication tokens for remote repositories"
+                        Description="Manage Git accounts and access tokens for remote repositories"
                         Header="Repository providers"
                         HeaderIcon="{ui:FontIcon Glyph=&#xF003;}"
                         IsExpanded="True">
@@ -289,6 +289,9 @@
                             IsOn="True"
                             Toggled="OnEnableSourceControlToggled" />
                         <controls:SettingsExpander.Items>
+                            <controls:SettingsCard Header="Git accounts" Description="Browser sign-in and account choices for organizations and repositories">
+                                <Button Content="Manage accounts" Click="OnManageGitAccountsClick" AutomationProperties.Name="Manage Git accounts" />
+                            </controls:SettingsCard>
                             <!-- GitHub Token Card -->
                             <controls:SettingsCard x:Name="GitHubCard" Header="GitHub">
                                 <controls:SettingsCard.Description>
@@ -676,7 +679,9 @@
 
                             <controls:SettingsCard ContentAlignment="Left" HorizontalContentAlignment="Left">
                                 <StackPanel Spacing="8">
-                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Dependencies &amp; references" />
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Components &amp; references" />
+                                    <TextBlock x:Name="ComponentVersionsTextBlock" Loaded="OnComponentVersionsLoaded" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                                    <Button Content="Third-party notices" Click="OnThirdPartyNoticesClick" AutomationProperties.Name="Read third-party software notices" />
                                     <StackPanel Spacing="2">
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.4" />
                                         <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />

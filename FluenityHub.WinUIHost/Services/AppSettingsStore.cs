@@ -37,8 +37,10 @@ public sealed class AppSettingsStore
         return settings;
     }
 
-    public void Save(AppSettings settings)
+    public void Save(AppSettings settings, bool updateGitAccounts = false)
     {
+        if (!updateGitAccounts && File.Exists(_settingsFilePath))
+            settings.GitAccounts = Load().GitAccounts;
         var content = JsonSerializer.Serialize(settings, AppJsonContext.Default.AppSettings);
         File.WriteAllText(_settingsFilePath, content);
     }

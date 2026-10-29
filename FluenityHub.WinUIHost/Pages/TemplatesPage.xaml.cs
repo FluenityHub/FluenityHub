@@ -15,6 +15,11 @@ namespace FluenityHub_WinUIHost.Pages;
 
 public sealed partial class TemplatesPage : Page
 {
+    private void OnSearchAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Programmatic);
+        args.Handled = true;
+    }
     private readonly TemplateService _templateService = new();
     private readonly UnityHubProjectService _projectService = new();
     private readonly UnityEditorLocator _editorLocator = new();
@@ -33,6 +38,8 @@ public sealed partial class TemplatesPage : Page
     public TemplatesPage()
     {
         InitializeComponent();
+        Loaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = true;
+        Unloaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = false;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)

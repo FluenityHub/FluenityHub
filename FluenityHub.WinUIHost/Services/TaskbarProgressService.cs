@@ -64,6 +64,10 @@ internal sealed class TaskbarProgressService : IDisposable
         }
         catch (Exception ex)
         {
+            if (_taskbarList is not null && Marshal.IsComObject(_taskbarList))
+            {
+                Marshal.FinalReleaseComObject(_taskbarList);
+            }
             _taskbarList = null;
             System.Diagnostics.Debug.WriteLine(
                 $"Taskbar progress initialization failed: {ex}");

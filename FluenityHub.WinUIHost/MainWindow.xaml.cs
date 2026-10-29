@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
     private UnityCliAuthState? _unityAccountState;
     private DateTimeOffset _unityAccountStatusCheckedAt;
     private bool _isUnityAccountBusy;
+    private bool _hideAccountAvatar;
     private bool _wasWindowDeactivated;
     private bool _refreshUnityAccountWhenIdle;
     private Task? _sharedUnityAccountRefreshTask;
@@ -142,6 +143,7 @@ public sealed partial class MainWindow : Window
         {
             var settingsStore = new AppSettingsStore();
             var settings = settingsStore.Load();
+            _hideAccountAvatar = settings.HideAccountAvatar;
             SetAppTheme(settings.AppTheme);
             EvaluateProcessPriority();
         }
@@ -160,6 +162,32 @@ public sealed partial class MainWindow : Window
     private void ShowInitialContent()
     {
         ShowMainContent();
+    }
+
+    public void SetNavigationBackState(bool canGoBack)
+    {
+        AppTitleBar.IsBackButtonVisible = canGoBack;
+        AppTitleBar.IsBackButtonEnabled = canGoBack;
+    }
+
+    public void SetAccountAvatarHidden(bool hidden)
+    {
+        _hideAccountAvatar = hidden;
+        var avatarName = _unityAccountState?.IsLoggedIn == true && !hidden
+            ? AccountMenuHeader.DisplayName
+            : string.Empty;
+        TitleBarPersonPicture.DisplayName = avatarName;
+        AccountMenuHeader.AvatarDisplayName = avatarName;
+    }
+
+    private void OnTitleBarBackRequested(Microsoft.UI.Xaml.Controls.TitleBar sender, object args)
+    {
+        if (RootFrame.Content is MainPage mainPage) mainPage.GoBack();
+    }
+
+    private void OnTitleBarPaneToggleRequested(Microsoft.UI.Xaml.Controls.TitleBar sender, object args)
+    {
+        if (RootFrame.Content is MainPage mainPage) mainPage.ToggleNavigationPane();
     }
 
     private void ShowMainContent(string? destination = null)
@@ -325,11 +353,8 @@ public sealed partial class MainWindow : Window
                 ? "Not signed in"
                 : state.Message;
 
-        TitleBarPersonPicture.DisplayName = state.IsLoggedIn ? displayName : string.Empty;
-        TitleBarPersonPicture.Initials = state.IsLoggedIn ? string.Empty : "\uE77B";
-        TitleBarPersonPicture.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(
-            state.IsLoggedIn ? "Segoe UI Variable" : "Segoe Fluent Icons");
         AccountMenuHeader.DisplayName = displayName;
+        SetAccountAvatarHidden(_hideAccountAvatar);
         AccountMenuHeader.Description = string.IsNullOrWhiteSpace(accountDescription)
             ? (state.IsLoggedIn ? "Signed in" : "Not signed in")
             : accountDescription;
@@ -394,7 +419,7 @@ public sealed partial class MainWindow : Window
     {
         AccountMenuFlyout.Hide();
         await Windows.System.Launcher.LaunchUriAsync(
-            new Uri("https://cloud.unity.com/home/organizations/18966914301594/settings/general"));
+            new Uri("https://cloud.unity.com/home/organizations"));
     }
 
     private async void OnUnityDiscussionsClick(object sender, RoutedEventArgs e)
@@ -418,6 +443,7 @@ public sealed partial class MainWindow : Window
             if (switchExistingAccount)
             {
                 var signedOutState = await _unityCliAuthService.LogoutAsync(cancellationToken);
+                if (signedOutState.SessionState == "unavailable") return signedOutState;
                 _unityLogoutSecurityService.ApplyAfterLogout(signedOutState);
                 UpdateUnityAccountState(signedOutState);
                 if (signedOutState.IsLoggedIn)
@@ -485,6 +511,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var state = await operation(cancellationToken);
+            if (state.SessionState == "unavailable") throw new IOException(state.Message);
             UpdateUnityAccountState(state);
             if (state.IsLoggedIn != expectLoggedIn)
             {
@@ -829,10 +856,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Account identity is persisted in Unity's shared account database. Read
-        // that lightweight source away from the UI thread instead of spawning
-        // Unity CLI during first paint. Explicit sign-in/out operations still
-        // use Unity CLI and publish their result immediately.
+        // A stored account record does not prove the broker credential is usable.
         _ = RefreshUnityAccountStateAsync();
     }
 
@@ -854,31 +878,17 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var state = await Task.Run(ReadSharedUnityAccountState, cancellationToken);
+            var state = UnityAccountConnectionState.IsDisconnected
+                ? new UnityCliAuthState(new UnityCliToolService().GetStatus().IsInstalled, false, string.Empty, string.Empty, string.Empty, "Not signed in")
+                : await _unityCliAuthService.GetStatusAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            if (state.SessionState == "unavailable")
+            {
+                ShowAccountStatus("Unity account unavailable", state.Message);
+                return;
+            }
             UpdateUnityAccountState(state);
 
-            if (state.IsLoggedIn && NetworkConnectivityService.Current.CanAttemptInternet)
-            {
-                if (UnitySharedAuthService.TryGetActiveAccessToken(out var token, out _)
-                    && token is not null
-                    && !UnitySharedAuthService.IsAccessTokenUsable(token)
-                    && UnitySharedAuthService.HasUsableRefreshToken(token))
-                {
-                    var (refreshed, _) = await Task.Run(
-                        () => UnitySharedAuthService.RefreshOAuthTokenAsync(cancellationToken),
-                        cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (refreshed is not null)
-                    {
-                        var updatedState = await Task.Run(
-                            ReadSharedUnityAccountState,
-                            cancellationToken);
-                        cancellationToken.ThrowIfCancellationRequested();
-                        UpdateUnityAccountState(updatedState);
-                    }
-                }
-            }
         }
         catch (OperationCanceledException)
         {
@@ -892,66 +902,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static UnityCliAuthState ReadSharedUnityAccountState()
-    {
-        var cliStatus = new UnityCliToolService().GetStatus();
 
-        if (!UnitySharedAuthService.TryGetActiveAccount(out var account, out var errorMessage))
-        {
-            throw new IOException(errorMessage);
-        }
-
-        if (account is null)
-        {
-            return new UnityCliAuthState(
-                cliStatus.IsInstalled,
-                false,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                cliStatus.IsInstalled ? "Not signed in" : "Install Unity CLI from Settings before signing in.");
-        }
-
-        if (!UnitySharedAuthService.TryGetActiveAccessToken(out var token, out _)
-            || token is null)
-        {
-            return new UnityCliAuthState(
-                cliStatus.IsInstalled,
-                false,
-                account.DisplayName,
-                account.Email,
-                "oauth",
-                "Unity sign-in expired. Sign in again to continue.")
-            {
-                SessionState = "expired"
-            };
-        }
-
-        var hasValidAccess = UnitySharedAuthService.IsAccessTokenUsable(token);
-        var hasValidRefresh = UnitySharedAuthService.HasUsableRefreshToken(token);
-
-        if (!hasValidAccess && !hasValidRefresh)
-        {
-            return new UnityCliAuthState(
-                cliStatus.IsInstalled,
-                false,
-                account.DisplayName,
-                account.Email,
-                "oauth",
-                "Unity sign-in expired. Sign in again to continue.")
-            {
-                SessionState = "expired"
-            };
-        }
-
-        return new UnityCliAuthState(
-            cliStatus.IsInstalled,
-            true,
-            account.DisplayName,
-            account.Email,
-            "oauth",
-            "Signed in securely through Unity CLI.");
-    }
 
     private void OnTaskbarButtonCreated()
     {
@@ -1212,20 +1163,31 @@ public sealed partial class MainWindow : Window
             var settings = new AppSettingsStore().Load();
             if (settings.LowerPriorityWhenUnityOpens)
             {
-                var isUnityRunning = System.Diagnostics.Process.GetProcessesByName("Unity").Length > 0;
-                var currentPriority = System.Diagnostics.Process.GetCurrentProcess().PriorityClass;
+                var unityProcesses = System.Diagnostics.Process.GetProcessesByName("Unity");
+                bool isUnityRunning;
+                try
+                {
+                    isUnityRunning = unityProcesses.Length > 0;
+                }
+                finally
+                {
+                    foreach (var process in unityProcesses) process.Dispose();
+                }
+                using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+                var currentPriority = currentProcess.PriorityClass;
                 var targetPriority = isUnityRunning ? System.Diagnostics.ProcessPriorityClass.BelowNormal : System.Diagnostics.ProcessPriorityClass.Normal;
 
                 if (currentPriority != targetPriority)
                 {
-                    System.Diagnostics.Process.GetCurrentProcess().PriorityClass = targetPriority;
+                    currentProcess.PriorityClass = targetPriority;
                 }
             }
             else
             {
-                if (System.Diagnostics.Process.GetCurrentProcess().PriorityClass != System.Diagnostics.ProcessPriorityClass.Normal)
+                using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+                if (currentProcess.PriorityClass != System.Diagnostics.ProcessPriorityClass.Normal)
                 {
-                    System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
+                    currentProcess.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
                 }
             }
         }

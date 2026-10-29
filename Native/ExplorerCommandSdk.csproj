@@ -5,8 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageDownload Include="Microsoft.Windows.SDK.CPP" Version="[10.0.28000.2526]" />
-    <PackageDownload Include="Microsoft.Windows.SDK.CPP.x64" Version="[10.0.28000.2526]" />
-    <PackageDownload Include="Microsoft.Windows.SDK.CPP.ARM64" Version="[10.0.28000.2526]" />
+    <PackageDownload Include="Microsoft.Windows.SDK.CPP" Version="[10.0.28000.2957]" />
+    <PackageDownload Include="Microsoft.Windows.SDK.CPP.x64" Version="[10.0.28000.2957]" />
+    <PackageDownload Include="Microsoft.Windows.SDK.CPP.ARM64" Version="[10.0.28000.2957]" />
   </ItemGroup>
 </Project>

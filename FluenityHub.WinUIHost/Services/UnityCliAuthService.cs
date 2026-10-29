@@ -121,7 +121,7 @@ public sealed class UnityCliAuthService
             executablePath,
             expectedLoggedIn: false,
             cancellationToken);
-        var finalState = !status.IsLoggedIn
+        var finalState = status.SessionState == "unavailable" ? status : !status.IsLoggedIn
             ? status with { Message = "Signed out of Unity." }
             : status with
             {
@@ -129,7 +129,7 @@ public sealed class UnityCliAuthService
                     ? logoutResult.Message
                     : "Unity CLI still reports an active account session."
             };
-        if (!finalState.IsLoggedIn)
+        if (!finalState.IsLoggedIn && finalState.SessionState != "unavailable")
         {
             UnityAccountConnectionState.SetDisconnected(true);
             UnitySharedAuthService.CancelPendingOAuthRefreshes();
@@ -160,10 +160,13 @@ public sealed class UnityCliAuthService
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
         startInfo.ArgumentList.Add("--format");
         startInfo.ArgumentList.Add("json");
+        startInfo.ArgumentList.Add("--no-log-proxy");
         startInfo.ArgumentList.Add("auth");
         startInfo.ArgumentList.Add(command);
+        if (command == "logout") startInfo.ArgumentList.Add("--yes");
 
         using var process = new Process { StartInfo = startInfo };
         var standardOutputBuilder = new StringBuilder();
@@ -193,7 +196,7 @@ public sealed class UnityCliAuthService
         if (!process.Start())
         {
             return new(true, false, string.Empty, string.Empty, string.Empty,
-                "Unity CLI could not be started.");
+                "Unity CLI could not be started.") { SessionState = "unavailable" };
         }
 
         process.BeginOutputReadLine();
@@ -222,7 +225,7 @@ public sealed class UnityCliAuthService
             return new(true, false, string.Empty, string.Empty, string.Empty,
                 command == "login"
                     ? "Unity sign-in timed out. You can try again safely."
-                    : "Unity CLI stopped responding.");
+                    : "Unity CLI stopped responding.") { SessionState = "unavailable" };
         }
         catch
         {
@@ -248,7 +251,7 @@ public sealed class UnityCliAuthService
         // 2. Try the final JSON document. Authentication commands can emit
         // progress records before the final result, so inspect records from
         // last to first when the complete output is not one JSON document.
-        if (TryParseJsonResult(command, cleanOutput, out var parsedState))
+        if (TryParseJsonResult(command, exitCode, cleanOutput, out var parsedState))
         {
             return parsedState;
         }
@@ -257,13 +260,17 @@ public sealed class UnityCliAuthService
                      ['\r', '\n'],
                      StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Reverse())
         {
-            if (TryParseJsonResult(command, line, out parsedState))
+            if (TryParseJsonResult(command, exitCode, line, out parsedState))
             {
                 return parsedState;
             }
         }
 
-        if (command == "logout" || command == "status" || exitCode == 0)
+        if (command == "status")
+        {
+            return new(true, false, string.Empty, string.Empty, string.Empty, "Unity account status could not be read. Try again.") { SessionState = "unavailable" };
+        }
+        if (command == "logout" || exitCode == 0)
         {
             return new(true, false, string.Empty, string.Empty, string.Empty, "Not signed in");
         }
@@ -274,10 +281,12 @@ public sealed class UnityCliAuthService
                 ? "Unity sign-in was not completed. Finish the browser sign-in and try again."
                 : "Not signed in");
 
-        return new(true, false, string.Empty, string.Empty, string.Empty, message);    }
+        return new(true, false, string.Empty, string.Empty, string.Empty, message);
+    }
 
     private static bool TryParseJsonResult(
         string command,
+        int exitCode,
         string json,
         out UnityCliAuthState state)
     {
@@ -291,11 +300,26 @@ public sealed class UnityCliAuthService
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return false;
+            if (exitCode != 0 || (root.TryGetProperty("success", out var commandSuccess) && commandSuccess.ValueKind == JsonValueKind.False))
+            {
+                state = new(true, false, string.Empty, string.Empty, string.Empty,
+                    ReadSafeError(root) ?? "Unity account status is temporarily unavailable.") { SessionState = "unavailable" };
+                return true;
+            }
             if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
             {
+                if (!data.TryGetProperty("loggedIn", out var loggedInValue)
+                    || loggedInValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
                 var reportedLoggedIn = ReadBoolean(data, "loggedIn");
                 var sessionState = ReadString(data, "sessionState") ?? string.Empty;
-                var sessionIsStale = sessionState.Equals("stale", StringComparison.OrdinalIgnoreCase);
+                if (sessionState is "unresolved" or "unavailable")
+                {
+                    state = new(true, false, string.Empty, string.Empty, string.Empty, "Unity account status is temporarily unavailable. Try again.") { SessionState = "unavailable" };
+                    return true;
+                }
+                var sessionIsStale = sessionState.Equals("stale", StringComparison.OrdinalIgnoreCase)
+                    || sessionState.Equals("expired", StringComparison.OrdinalIgnoreCase);
                 var loggedIn = reportedLoggedIn && !sessionIsStale;
                 var mode = ReadString(data, "mode") ?? string.Empty;
                 var name = string.Empty;
@@ -326,7 +350,7 @@ public sealed class UnityCliAuthService
             var safeError = ReadSafeError(root);
             if (!string.IsNullOrWhiteSpace(safeError))
             {
-                state = new(true, false, string.Empty, string.Empty, string.Empty, safeError);
+                state = new(true, false, string.Empty, string.Empty, string.Empty, safeError) { SessionState = "unavailable" };
                 return true;
             }
 
@@ -334,7 +358,8 @@ public sealed class UnityCliAuthService
                 && root.TryGetProperty("success", out var success)
                 && success.ValueKind == JsonValueKind.True)
             {
-                state = new(true, false, string.Empty, string.Empty, string.Empty, "Not signed in");
+                state = new(true, false, string.Empty, string.Empty, string.Empty,
+                    "Unity account status could not be read. Try again.") { SessionState = "unavailable" };
                 return true;
             }
 
@@ -397,7 +422,7 @@ public sealed class UnityCliAuthService
                 StatusTimeout,
                 cancellationToken,
                 executablePath);
-            if (lastState.IsLoggedIn == expectedLoggedIn)
+            if (lastState.IsLoggedIn == expectedLoggedIn && lastState.SessionState != "unavailable")
             {
                 return lastState;
             }
@@ -425,7 +450,7 @@ public sealed class UnityCliAuthService
 
     private static UnityCliAuthState CliUnavailableState()
         => new(false, false, string.Empty, string.Empty, string.Empty,
-            "Install Unity CLI from Settings before signing in.");
+            "Install Unity CLI from Settings before signing in.") { SessionState = "unavailable" };
 
     private static string? ReadSafeError(JsonElement root)
     {
@@ -448,13 +473,13 @@ public sealed class UnityCliAuthService
     }
 
     private static string? ReadString(JsonElement element, string name)
-        => element.TryGetProperty(name, out var value)
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
            && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 
     private static bool ReadBoolean(JsonElement element, string name)
-        => element.TryGetProperty(name, out var value)
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
            && value.ValueKind == JsonValueKind.True;
 
     private static void TryCancelOutputRead(Process process)

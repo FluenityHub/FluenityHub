@@ -49,6 +49,7 @@ public sealed class UnityEditorReleaseListItem
         return components[0] switch
         {
             "6000" => components[1] == "0" ? "6" : $"6.{components[1]}",
+            "7000" => components[1] == "0" ? "7" : $"7.{components[1]}",
             _ => $"{components[0]}.{components[1]}"
         };
     }
@@ -88,6 +89,13 @@ public sealed partial class InstallEditorDialog : ContentDialog
 
     public ObservableCollection<UnityEditorReleaseListItem> Releases { get; } = [];
     public UnityEditorRelease? SelectedRelease { get; private set; }
+    public bool InstallFromLinkRequested { get; private set; }
+
+    private void OnInstallFromLinkClick(object sender, RoutedEventArgs args)
+    {
+        InstallFromLinkRequested = true;
+        Hide();
+    }
 
     public InstallEditorDialog(
         IEnumerable<string> installedVersions,

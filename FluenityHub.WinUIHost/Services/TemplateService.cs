@@ -613,6 +613,7 @@ public sealed class TemplateService
                 }
 
                 // Ensure ProjectSettings/ProjectVersion.txt is updated with chosen targetEditorVersion
+                Directory.CreateDirectory(Path.Combine(targetProjectPath, "Assets"));
                 var projectSettingsDir = Path.Combine(targetProjectPath, "ProjectSettings");
                 Directory.CreateDirectory(projectSettingsDir);
                 var versionFile = Path.Combine(projectSettingsDir, "ProjectVersion.txt");
@@ -885,6 +886,9 @@ public sealed class TemplateService
 
         WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Assets"), "Assets", cancellationToken);
         WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "Packages"), "Packages", cancellationToken);
+        var library = new DirectoryInfo(Path.Combine(projectPath, "Library"));
+        if (library.Exists && !library.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            WriteProjectDirectory(tarWriter, Path.Combine(library.FullName, "DataStore"), "Library/DataStore", cancellationToken);
         if (keepProjectSettings)
         {
             WriteProjectDirectory(tarWriter, Path.Combine(projectPath, "ProjectSettings"), "ProjectSettings", cancellationToken);
@@ -929,6 +933,7 @@ public sealed class TemplateService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        writer.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"package/ProjectData~/{archiveDirectory}/"));
         FileInfo[] files;
         try { files = directory.GetFiles(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }

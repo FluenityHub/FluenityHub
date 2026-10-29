@@ -119,7 +119,7 @@ public static class JumpListService
         public PropertyKey(Guid guid, uint id) { fmtid = guid; pid = id; }
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
     private struct PropVariant
     {
         [FieldOffset(0)] public ushort vt;
@@ -184,6 +184,7 @@ public static class JumpListService
     /// </summary>
     public static void EnsureStartMenuShortcut()
     {
+        IShellLinkW? link = null;
         try
         {
             var processPath = Environment.ProcessPath;
@@ -202,12 +203,7 @@ public static class JumpListService
             }
 
             var shortcutPath = Path.Combine(startMenuDir, "FluenityHub.lnk");
-            if (File.Exists(shortcutPath))
-            {
-                try { File.Delete(shortcutPath); } catch { }
-            }
-
-            var link = (IShellLinkW)new ShellLink();
+            link = (IShellLinkW)new ShellLink();
             link.SetPath(processPath);
             link.SetWorkingDirectory(Path.GetDirectoryName(processPath) ?? AppContext.BaseDirectory);
             link.SetDescription("FluenityHub - Native Unity Hub Alternative");
@@ -216,9 +212,15 @@ public static class JumpListService
             var propStore = (IPropertyStore)link;
             var key = PKEY_AppUserModel_ID;
             var pv = PropVariant.FromString(AppUserModelId);
-            propStore.SetValue(ref key, ref pv);
-            propStore.Commit();
-            pv.Free();
+            try
+            {
+                propStore.SetValue(ref key, ref pv);
+                propStore.Commit();
+            }
+            finally
+            {
+                pv.Free();
+            }
 
             var persistFile = (IPersistFile)link;
             persistFile.Save(shortcutPath, true);
@@ -226,6 +228,10 @@ public static class JumpListService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"EnsureStartMenuShortcut failed: {ex.Message}");
+        }
+        finally
+        {
+            if (link is not null) Marshal.FinalReleaseComObject(link);
         }
     }
 
@@ -235,22 +241,33 @@ public static class JumpListService
     public static void SetWindowAppUserModelId(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return;
+        IPropertyStore? propStore = null;
         try
         {
             var iid = IID_IPropertyStore;
-            int hr = SHGetPropertyStoreForWindow(hwnd, ref iid, out var propStore);
+            int hr = SHGetPropertyStoreForWindow(hwnd, ref iid, out propStore);
             if (hr == 0 && propStore is not null)
             {
                 var key = PKEY_AppUserModel_ID;
                 var pv = PropVariant.FromString(AppUserModelId);
-                propStore.SetValue(ref key, ref pv);
-                propStore.Commit();
-                pv.Free();
+                try
+                {
+                    propStore.SetValue(ref key, ref pv);
+                    propStore.Commit();
+                }
+                finally
+                {
+                    pv.Free();
+                }
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"SetWindowAppUserModelId failed: {ex.Message}");
+        }
+        finally
+        {
+            if (propStore is not null) Marshal.FinalReleaseComObject(propStore);
         }
     }
 
@@ -268,6 +285,9 @@ public static class JumpListService
                 _isUpdating = true;
             }
 
+            ICustomDestinationList? destList = null;
+            IObjectCollection? taskCollection = null;
+            object? removedDestinations = null;
             try
             {
                 InitializeAppUserModelId();
@@ -278,18 +298,18 @@ public static class JumpListService
                     processPath = Path.Combine(AppContext.BaseDirectory, "FluenityHub.exe");
                 }
 
-                var destList = (ICustomDestinationList)new DestinationList();
+                destList = (ICustomDestinationList)new DestinationList();
                 destList.SetAppID(AppUserModelId);
 
                 var iid = IID_IUnknown;
-                int hr = destList.BeginList(out uint minSlots, ref iid, out _);
+                int hr = destList.BeginList(out uint minSlots, ref iid, out removedDestinations);
                 if (hr != 0)
                 {
                     System.Diagnostics.Debug.WriteLine($"ICustomDestinationList.BeginList failed with hr={hr:X8}");
                     return;
                 }
 
-                var taskCollection = (IObjectCollection)new EnumerableObjectCollection();
+                taskCollection = (IObjectCollection)new EnumerableObjectCollection();
 
                 // 1. Primary Task: New project
                 AddShellLink(
@@ -341,7 +361,7 @@ public static class JumpListService
                 int hrTasks = destList.AddUserTasks(taskCollection);
                 if (hrTasks == 0)
                 {
-                    destList.CommitList();
+                    Marshal.ThrowExceptionForHR(destList.CommitList());
                 }
                 else
                 {
@@ -355,6 +375,9 @@ public static class JumpListService
             }
             finally
             {
+                if (taskCollection is not null) Marshal.FinalReleaseComObject(taskCollection);
+                if (removedDestinations is not null) Marshal.FinalReleaseComObject(removedDestinations);
+                if (destList is not null) Marshal.FinalReleaseComObject(destList);
                 lock (SyncLock)
                 {
                     _isUpdating = false;
@@ -370,9 +393,10 @@ public static class JumpListService
         string title,
         string description)
     {
+        IShellLinkW? link = null;
         try
         {
-            var link = (IShellLinkW)new ShellLink();
+            link = (IShellLinkW)new ShellLink();
             link.SetPath(executablePath);
             link.SetArguments(arguments);
             link.SetDescription(description);
@@ -381,15 +405,25 @@ public static class JumpListService
             var propStore = (IPropertyStore)link;
             var key = PKEY_Title;
             var pv = PropVariant.FromString(title);
-            propStore.SetValue(ref key, ref pv);
-            propStore.Commit();
-            pv.Free();
+            try
+            {
+                propStore.SetValue(ref key, ref pv);
+                propStore.Commit();
+            }
+            finally
+            {
+                pv.Free();
+            }
 
             collection.AddObject(link);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"AddShellLink '{title}' failed: {ex.Message}");
+        }
+        finally
+        {
+            if (link is not null) Marshal.FinalReleaseComObject(link);
         }
     }
 }

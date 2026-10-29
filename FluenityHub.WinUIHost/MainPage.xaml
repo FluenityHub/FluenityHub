@@ -8,13 +8,17 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
+    <Page.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="OnBackKeyboardAcceleratorInvoked" />
+    </Page.KeyboardAccelerators>
+
     <NavigationView
         x:Name="AppNavigationView"
-        BackRequested="OnNavigationViewBackRequested"
         IsBackButtonVisible="Collapsed"
+        IsPaneToggleButtonVisible="False"
         IsSettingsVisible="True"
         OpenPaneLength="220"
-        PaneDisplayMode="Left"
+        PaneDisplayMode="Auto"
         SelectionChanged="OnNavigationViewSelectionChanged">
         <NavigationView.MenuItems>
             <NavigationViewItem AutomationProperties.Name="Projects" Content="Projects" Tag="projects">

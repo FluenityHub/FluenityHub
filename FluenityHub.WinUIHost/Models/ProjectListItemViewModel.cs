@@ -9,6 +9,18 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    private bool _isContextMenuLoaded;
+    public bool IsContextMenuLoaded
+    {
+        get => _isContextMenuLoaded;
+        set
+        {
+            if (_isContextMenuLoaded == value) return;
+            _isContextMenuLoaded = value;
+            OnPropertyChanged();
+        }
+    }
+
     public UnityProjectInfo Project { get; }
 
     public string Title => Project.Title;

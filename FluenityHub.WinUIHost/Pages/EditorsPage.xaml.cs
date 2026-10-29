@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.Json;
 using FluenityHub_WinUIHost.Dialogs;
 using FluenityHub_WinUIHost.Helpers;
 using FluenityHub_WinUIHost.Models;
@@ -9,12 +11,39 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace FluenityHub_WinUIHost.Pages;
 
-public sealed class EditorListItem
+public sealed class EditorListItem : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private string _releaseStream = string.Empty;
+    public string ReleaseStream
+    {
+        get => _releaseStream;
+        set
+        {
+            if (_releaseStream == value) return;
+            _releaseStream = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReleaseStream)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReleaseStreamBadge)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReleaseStreamBadgeVisibility)));
+        }
+    }
+    public string ReleaseStreamBadge => ReleaseStream.ToUpperInvariant() switch
+    {
+        "LTS" => "LTS",
+        "SUPPORTED" => "Supported",
+        _ => string.Empty
+    };
+    public Visibility ReleaseStreamBadgeVisibility =>
+        ReleaseStreamBadge.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
     public required UnityEditorInfo Editor { get; init; }
     public required bool CanUseEditor { get; init; }
     public required bool IsUninstalling { get; init; }
     public required int ProjectCount { get; init; }
+    public required bool IsDefault { get; init; }
+    public Visibility DefaultBadgeVisibility => IsDefault ? Visibility.Visible : Visibility.Collapsed;
+    public string DefaultEditorGlyph => IsDefault ? "\uE735" : "\uE734";
+    public string DefaultEditorActionText => IsDefault ? "Clear default" : "Use as default";
 
     public List<TargetPlatformInfo> TargetPlatforms => Editor.InstalledTargetPlatforms ?? [];
     public string ProjectCountLabel => ProjectCount == 1 ? "1 project" : $"{ProjectCount} projects";
@@ -29,11 +58,19 @@ public sealed class EditorListItem
 
 public sealed partial class EditorsPage : Page
 {
+    private Visibility GetActivityVisibility(Visibility own, Visibility external)
+        => own == Visibility.Visible || external == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+    private void OnSearchAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Programmatic);
+        args.Handled = true;
+    }
     private readonly UnityEditorLocator _editorLocator = new();
     private readonly AppSettingsStore _settingsStore = new();
     private readonly UnityHubLocationSettingsService _unityHubLocationSettingsService = new();
     private readonly UnityHubProjectService _projectService = new();
     private readonly UnityEditorInstallationService _editorInstallationService = new();
+    private readonly UnityEditorReleaseService _editorReleaseService = new();
     private readonly UnityEditorLaunchService _editorLaunchService = new();
     private readonly UnityModuleInstallationManager _moduleInstallationManager =
         UnityModuleInstallationManager.Instance;
@@ -41,19 +78,33 @@ public sealed partial class EditorsPage : Page
     private readonly HashSet<string> _uninstallingEditorVersions =
         new(StringComparer.OrdinalIgnoreCase);
     public ObservableCollection<UnityModuleInstallationListItem> ModuleOperations { get; } = [];
+    public ObservableCollection<UnityExternalActivityInfo> ExternalActivities { get; } = [];
     private AppSettings _settings = new();
     private bool _hasLoadedEditors;
     private Task? _editorReloadTask;
+    private readonly DispatcherTimer _externalRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private string? _externalFingerprint;
+    private bool _externalRefreshBusy;
+    private bool _externalActivityWarningShown;
+    private string? _defaultEditorVersion;
+    private readonly Dictionary<string, string> _releaseStreams = new(StringComparer.OrdinalIgnoreCase);
+    private Task? _releaseLookupTask;
+    private bool _isChangingDefaultEditor;
+    private CancellationTokenSource? _externalRefreshCancellation;
 
     public EditorsPage()
     {
         InitializeComponent();
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
+        _externalRefreshTimer.Tick += OnExternalRefreshTick;
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        SearchKeyboardAccelerator.IsEnabled = true;
+        _externalRefreshCancellation = new CancellationTokenSource();
+        _externalRefreshTimer.Start();
         _moduleInstallationManager.OperationChanged += OnModuleInstallationChanged;
         SyncModuleOperations();
         if (!_hasLoadedEditors)
@@ -67,13 +118,63 @@ public sealed partial class EditorsPage : Page
         }
         else
         {
-            ApplyFilterAndSort();
+            await ReloadEditorsAsync();
         }
     }
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
+        SearchKeyboardAccelerator.IsEnabled = false;
+        _externalRefreshTimer.Stop();
+        _externalRefreshCancellation?.Cancel();
+        _externalRefreshCancellation?.Dispose();
+        _externalRefreshCancellation = null;
+        _releaseLookupTask = null;
         _moduleInstallationManager.OperationChanged -= OnModuleInstallationChanged;
+    }
+
+    private async void OnExternalRefreshTick(object? sender, object e)
+    {
+        if (_externalRefreshBusy || _editorReloadTask is { IsCompleted: false }
+            || _externalRefreshCancellation is null) return;
+        _externalRefreshBusy = true;
+        var cancellation = _externalRefreshCancellation.Token;
+        try
+        {
+            var editors = _allEditors.ToArray();
+            try
+            {
+                var ownVersions = _moduleInstallationManager.ActiveOperations
+                    .Select(operation => $"Unity {operation.EditorVersion}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var activities = (await UnityExternalActivityService.ReadAsync(cancellation))
+                    .Where(activity => !ownVersions.Contains(activity.Title)).ToArray();
+                cancellation.ThrowIfCancellationRequested();
+                if (!ExternalActivities.SequenceEqual(activities))
+                {
+                    ExternalActivities.Clear();
+                    foreach (var activity in activities) ExternalActivities.Add(activity);
+                    ExternalActivityExpander.Visibility = ExternalActivities.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+                }
+                _externalActivityWarningShown = false;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+            {
+                if (!_externalActivityWarningShown)
+                    ShowStatus("Unity Hub activity could not be read", ex.Message, InfoBarSeverity.Warning);
+                _externalActivityWarningShown = true;
+            }
+            var root = _unityHubLocationSettingsService.GetInstallLocation();
+            var fingerprint = await Task.Run(() => UnityExternalInstallationMonitor.ReadFingerprint(editors, root), cancellation);
+            cancellation.ThrowIfCancellationRequested();
+            if (_externalFingerprint is not null && fingerprint != _externalFingerprint) await ReloadEditorsAsync();
+            _externalFingerprint = fingerprint;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            ShowStatus("Installed Editors could not be refreshed", ex.Message, InfoBarSeverity.Warning);
+        }
+        finally { _externalRefreshBusy = false; }
     }
 
     private Task ReloadEditorsAsync()
@@ -100,14 +201,28 @@ public sealed partial class EditorsPage : Page
                 var editors = _editorLocator
                     .GetInstalledEditorDetails(settings.CustomEditorPaths)
                     .ToList();
-                return (Settings: settings, Editors: editors);
+                var streams = UnityEditorReleaseStatusService.ReadCachedStreams(editors);
+                return (Settings: settings, Editors: editors, Streams: streams);
             });
 
             _settings = loadResult.Settings;
             _allEditors.Clear();
             _allEditors.AddRange(loadResult.Editors);
+            foreach (var (version, stream) in loadResult.Streams) _releaseStreams[version] = stream;
+
+            try
+            {
+                _defaultEditorVersion = await UnityEditorPreferenceService.GetDefaultVersionAsync(CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                _defaultEditorVersion = null;
+                ShowStatus("Default Editor could not be loaded", ex.Message, InfoBarSeverity.Warning);
+            }
 
             ApplyFilterAndSort();
+            if (_externalRefreshCancellation is { } cancellation && _releaseLookupTask is not { IsCompleted: false })
+                _releaseLookupTask = RefreshMissingReleaseStreamsAsync(cancellation.Token);
         }
         catch (Exception ex)
         {
@@ -119,6 +234,36 @@ public sealed partial class EditorsPage : Page
         finally
         {
             SetEditorsLoadingState(false);
+        }
+    }
+
+    private async Task RefreshMissingReleaseStreamsAsync(CancellationToken cancellationToken)
+    {
+        var versions = _allEditors.Select(editor => editor.Version)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(version => !_releaseStreams.ContainsKey(version)).ToArray();
+        foreach (var version in versions)
+        {
+            try
+            {
+                var release = await Task.Run(
+                    () => _editorReleaseService.GetReleaseAsync(version, cancellationToken), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var stream = release?.Stream ?? string.Empty;
+                _releaseStreams[version] = stream;
+                if (EditorsListView.ItemsSource is IEnumerable<EditorListItem> rows)
+                    foreach (var row in rows.Where(row => row.Editor.Version.Equals(version, StringComparison.OrdinalIgnoreCase)))
+                        row.ReleaseStream = stream;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException
+                or InvalidOperationException or OperationCanceledException)
+            {
+                Debug.WriteLine($"Release stream unavailable for Unity {version}: {ex.GetType().Name}");
+            }
         }
     }
 
@@ -193,6 +338,8 @@ public sealed partial class EditorsPage : Page
                 CanUseEditor = !busyEditorVersions.Contains(editor.Version)
                     && !_uninstallingEditorVersions.Contains(editor.Version),
                 IsUninstalling = _uninstallingEditorVersions.Contains(editor.Version),
+                IsDefault = string.Equals(editor.Version, _defaultEditorVersion, StringComparison.OrdinalIgnoreCase),
+                ReleaseStream = _releaseStreams.GetValueOrDefault(editor.Version, string.Empty),
                 ProjectCount = allProjects.Count(p => string.Equals(p.Version, editor.Version, StringComparison.OrdinalIgnoreCase))
             })
             .ToList();
@@ -210,6 +357,35 @@ public sealed partial class EditorsPage : Page
         if (SortOldestItem?.IsChecked == true) return 1;
         if (SortDirectoryItem?.IsChecked == true) return 2;
         return 0;
+    }
+
+    private async void OnDefaultEditorClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: UnityEditorInfo editor }) return;
+        if (_isChangingDefaultEditor)
+        {
+            return;
+        }
+
+        _isChangingDefaultEditor = true;
+        try
+        {
+            var version = string.Equals(editor.Version, _defaultEditorVersion, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : editor.Version;
+            await UnityEditorPreferenceService.SetDefaultVersionAsync(version, CancellationToken.None);
+            _defaultEditorVersion = version;
+            ApplyFilterAndSort();
+            ShowStatus(version is null ? "Default Editor cleared." : $"{editor.DisplayName} is the default Editor.", InfoBarSeverity.Success);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            ShowStatus("Default Editor could not be changed", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _isChangingDefaultEditor = false;
+        }
     }
 
     private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -481,14 +657,21 @@ public sealed partial class EditorsPage : Page
                 RequestedTheme = targetTheme
             };
             await dialog.ShowAsync();
-            if (dialog.SelectedRelease is null)
+            var selectedRelease = dialog.SelectedRelease;
+            if (dialog.InstallFromLinkRequested)
+            {
+                var linkDialog = new InstallEditorFromLinkDialog { XamlRoot = xamlRoot, RequestedTheme = targetTheme };
+                var linkResult = await linkDialog.ShowAsync();
+                selectedRelease = linkResult == ContentDialogResult.Primary ? linkDialog.SelectedRelease : null;
+            }
+            if (selectedRelease is null)
             {
                 return;
             }
 
             _settings = _settingsStore.Load();
             var installRoot = _unityHubLocationSettingsService.GetInstallLocation();
-            var modulesDialog = new AddModulesDialog(dialog.SelectedRelease, installRoot)
+            var modulesDialog = new AddModulesDialog(selectedRelease, installRoot)
             {
                 XamlRoot = xamlRoot,
                 RequestedTheme = targetTheme

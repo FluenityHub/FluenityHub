@@ -135,6 +135,7 @@ public sealed class UnityCliToolService
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+            startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
             using var process = Process.Start(startInfo);
             if (process is null) return null;
             var output = process.StandardOutput.ReadToEnd().Trim();
@@ -536,6 +537,7 @@ public sealed class UnityCliToolService
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
         startInfo.ArgumentList.Add("install-modules");
         startInfo.ArgumentList.Add("--help");
 

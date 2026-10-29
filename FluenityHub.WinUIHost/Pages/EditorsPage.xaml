@@ -55,7 +55,11 @@
                         QueryIcon="Find"
                         QuerySubmitted="OnSearchQuerySubmitted"
                         TextChanged="OnSearchTextChanged"
-                        UpdateTextOnSelect="False" />
+                        UpdateTextOnSelect="False" >
+                        <AutoSuggestBox.KeyboardAccelerators>
+                            <KeyboardAccelerator x:Name="SearchKeyboardAccelerator" Key="F" Modifiers="Control" IsEnabled="False" Invoked="OnSearchAccelerator" />
+                        </AutoSuggestBox.KeyboardAccelerators>
+                    </AutoSuggestBox>
 
                     <Button
                         Height="32"
@@ -144,7 +148,15 @@
                 Grid.Row="2"
                 Margin="0,0,0,12"
                 Spacing="8"
-                Visibility="{x:Bind DownloadsExpander.Visibility, Mode=OneWay}">
+                Visibility="{x:Bind GetActivityVisibility(DownloadsExpander.Visibility, ExternalActivityExpander.Visibility), Mode=OneWay}">
+            <controls:SettingsExpander x:Name="ExternalActivityExpander" Header="Unity Hub and CLI activity"
+                Description="Managed by Unity Hub or Unity CLI" Visibility="Collapsed" Margin="0,0,0,12" ItemsSource="{x:Bind ExternalActivities}">
+                <controls:SettingsExpander.ItemTemplate>
+                    <DataTemplate x:DataType="models:UnityExternalActivityInfo">
+                        <controls:SettingsCard Header="{x:Bind Title}" Description="{x:Bind Status}" />
+                    </DataTemplate>
+                </controls:SettingsExpander.ItemTemplate>
+            </controls:SettingsExpander>
                 <controls:SettingsExpander
                     x:Name="DownloadsExpander"
                     Margin="0,0,0,0"
@@ -468,6 +480,16 @@
 
                                     <MenuFlyoutSeparator />
 
+                                    <MenuFlyoutItem
+                                        Click="OnDefaultEditorClick"
+                                        IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}"
+                                        Tag="{x:Bind Editor, Mode=OneTime}"
+                                        Text="{x:Bind DefaultEditorActionText, Mode=OneTime}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="{x:Bind DefaultEditorGlyph, Mode=OneTime}" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+
                                     <MenuFlyoutItem Click="OnVerifyIntegrityClick" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE90F;" />
@@ -514,6 +536,20 @@
                                             Style="{StaticResource BodyStrongTextBlockStyle}"
                                             Text="{x:Bind Editor.DisplayName, Mode=OneTime}"
                                             VerticalAlignment="Center" />
+
+                                        <Border Padding="6,0" CornerRadius="{ThemeResource ControlCornerRadius}"
+                                            Height="20" VerticalAlignment="Center"
+                                            Background="{ThemeResource ControlAltFillColorSecondaryBrush}"
+                                            Visibility="{x:Bind ReleaseStreamBadgeVisibility, Mode=OneWay}">
+                                            <TextBlock Text="{x:Bind ReleaseStreamBadge, Mode=OneWay}"
+                                                VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" />
+                                        </Border>
+
+                                        <Border Padding="6,0" CornerRadius="{ThemeResource ControlCornerRadius}"
+                                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                            Visibility="{x:Bind DefaultBadgeVisibility, Mode=OneTime}">
+                                            <TextBlock Text="Default" Style="{StaticResource CaptionTextBlockStyle}" />
+                                        </Border>
 
                                         <!-- Installed Target Platform Badges -->
                                         <ItemsControl ItemsSource="{x:Bind TargetPlatforms, Mode=OneTime}" VerticalAlignment="Center">
@@ -644,6 +680,16 @@
 
                                             <MenuFlyoutSeparator />
 
+                                            <MenuFlyoutItem
+                                                Click="OnDefaultEditorClick"
+                                                IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}"
+                                                Tag="{x:Bind Editor, Mode=OneTime}"
+                                                Text="{x:Bind DefaultEditorActionText, Mode=OneTime}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="{x:Bind DefaultEditorGlyph, Mode=OneTime}" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+
                                             <MenuFlyoutItem Click="OnVerifyIntegrityClick" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
                                                 <MenuFlyoutItem.Icon>
                                                     <FontIcon Glyph="&#xE90F;" />
@@ -696,7 +742,7 @@
                     HorizontalAlignment="Center"
                     FontSize="40"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    Glyph="&#xEC05;" />
+                    Glyph="&#xEC7A;" />
                 <TextBlock
                     HorizontalAlignment="Center"
                     Style="{StaticResource BodyStrongTextBlockStyle}"

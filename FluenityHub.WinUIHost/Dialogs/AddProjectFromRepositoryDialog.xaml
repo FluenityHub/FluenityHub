@@ -46,6 +46,7 @@
 
             <!-- Personal Access Token Section -->
             <StackPanel x:Name="TokenSectionStackPanel" Spacing="6">
+                <Button Content="Sign in with browser" Click="OnBrowserSignInClick" AutomationProperties.Name="Sign in to repository provider with browser" />
                 <StackPanel Orientation="Horizontal" Spacing="4">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Personal Access Token" />
                     <Button

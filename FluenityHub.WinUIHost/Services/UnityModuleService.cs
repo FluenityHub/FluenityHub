@@ -676,6 +676,8 @@ public sealed class UnityModuleService
             RedirectStandardError = true,
             RedirectStandardInput = true
         };
+        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
+        startInfo.ArgumentList.Add("--no-log-proxy");
         startInfo.ArgumentList.Add("editors");
         startInfo.ArgumentList.Add("--installed");
         startInfo.ArgumentList.Add("--format");
@@ -802,6 +804,8 @@ public sealed class UnityModuleService
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
+        startInfo.ArgumentList.Add("--no-log-proxy");
         startInfo.ArgumentList.Add("editors");
         startInfo.ArgumentList.Add("add");
         startInfo.ArgumentList.Add(editorExecutablePath);

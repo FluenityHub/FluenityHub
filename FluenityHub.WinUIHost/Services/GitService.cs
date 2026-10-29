@@ -315,6 +315,15 @@ public sealed class GitService
                 // 5. Add or update remote origin when one was supplied.
                 if (hasRemote)
                 {
+                    if (string.IsNullOrWhiteSpace(credentialPassword))
+                    {
+                        var preferredAccount = GitCredentialManagerService.ConfigureGitProcess(new ProcessStartInfo(), remoteUrl);
+                        if (preferredAccount is not null)
+                        {
+                            var choice = RunGit(projectPath, ["config", "credential.username", preferredAccount]);
+                            if (!choice.Success) return (false, "The local Git account choice could not be saved.");
+                        }
+                    }
                     var (setRemoteSuccess, _) = RunGit(projectPath, ["remote", "set-url", "origin", remoteUrl]);
                     if (!setRemoteSuccess)
                     {
@@ -342,7 +351,7 @@ public sealed class GitService
                                 remoteUrl,
                                 credentialUser.Trim(),
                                 credentialPassword.Trim())
-                            : RunGit(projectPath, ["push", "-u", "origin", branchName]);
+                            : RunGit(projectPath, ["push", "-u", "origin", branchName], credentialRemote: remoteUrl);
                         if (!pushSuccess)
                         {
                             return (true, $"Repository created and connected, but push failed: {pushErr}");
@@ -365,7 +374,8 @@ public sealed class GitService
         string workingDirectory,
         IReadOnlyList<string> arguments,
         string? standardInput = null,
-        IReadOnlyDictionary<string, string>? environmentVariables = null)
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        string? credentialRemote = null)
     {
         using var process = new Process
         {
@@ -387,6 +397,9 @@ public sealed class GitService
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
+
+        if (credentialRemote is not null)
+            GitCredentialManagerService.ConfigureGitProcess(process.StartInfo, credentialRemote);
 
         if (environmentVariables is not null)
         {
@@ -470,8 +483,8 @@ public sealed class GitService
 
         if (Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri))
         {
-            return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(uri.Scheme, Uri.UriSchemeSsh, StringComparison.OrdinalIgnoreCase);
+            return (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(uri.UserInfo))
+                || (string.Equals(uri.Scheme, Uri.UriSchemeSsh, StringComparison.OrdinalIgnoreCase) && !uri.UserInfo.Contains(':'));
         }
 
         var colonIndex = remoteUrl.IndexOf(':');
@@ -599,7 +612,8 @@ public sealed class GitService
         File.WriteAllText(attrPath, unityGitAttributes.Trim(), Encoding.UTF8);
     }
 
-    public static async Task<(bool Success, string Message)> CloneRepositoryAsync(string cloneUrl, string targetDirectory, string? branch = null)
+    public static async Task<(bool Success, string Message)> CloneRepositoryAsync(string cloneUrl, string targetDirectory, string? branch = null,
+        CancellationToken cancellationToken = default, IProgress<string>? progress = null)
     {
         if (!NetworkConnectivityService.Current.CanAttemptInternet)
         {
@@ -617,6 +631,11 @@ public sealed class GitService
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Directory.Exists(targetDirectory) && Directory.EnumerateFileSystemEntries(targetDirectory).Any())
+                return (false, "Choose a new or empty folder for the repository.");
+            if (!string.IsNullOrWhiteSpace(branch) && !IsSafeBranchName(branch))
+                return (false, "The branch name is invalid.");
             if (!Directory.Exists(targetDirectory))
             {
                 Directory.CreateDirectory(targetDirectory);
@@ -632,30 +651,54 @@ public sealed class GitService
             };
 
             startInfo.ArgumentList.Add("clone");
+            startInfo.ArgumentList.Add("--progress");
             if (!string.IsNullOrWhiteSpace(branch))
             {
                 startInfo.ArgumentList.Add("--branch");
                 startInfo.ArgumentList.Add(branch);
             }
+            startInfo.ArgumentList.Add("--");
             startInfo.ArgumentList.Add(cloneUrl);
             startInfo.ArgumentList.Add(targetDirectory);
-
+            var preferredAccount = GitCredentialManagerService.ConfigureGitProcess(startInfo, cloneUrl);
             using var process = Process.Start(startInfo);
             if (process is null)
             {
                 return (false, "Failed to start Git process.");
             }
 
-            var errorTask = process.StandardError.ReadToEndAsync();
-
-            await process.WaitForExitAsync();
-
-            string err = await errorTask;
+            var errorOutput = new StringBuilder();
+            var outputTask = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null, cancellationToken);
+            var errorTask = Task.Run(async () =>
+            {
+                while (await process.StandardError.ReadLineAsync(cancellationToken) is { } line)
+                {
+                    if (errorOutput.Length < 64 * 1024) errorOutput.AppendLine(line);
+                    progress?.Report(line);
+                }
+            }, cancellationToken);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromMinutes(30));
+            try { await process.WaitForExitAsync(deadline.Token); await Task.WhenAll(outputTask, errorTask); }
+            catch (OperationCanceledException)
+            {
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { }
+                await process.WaitForExitAsync();
+                try { await Task.WhenAll(outputTask, errorTask); } catch (OperationCanceledException) { }
+                return (false, cancellationToken.IsCancellationRequested ? "Clone canceled. Any partial files were kept in the selected folder." : "Git clone timed out. Any partial files were kept in the selected folder.");
+            }
+            string err = errorOutput.ToString();
             if (process.ExitCode != 0)
             {
                 return (false, string.IsNullOrWhiteSpace(err) ? "Git clone exited with non-zero code." : err.Trim());
             }
 
+            if (preferredAccount is not null)
+            {
+                var savedAccount = await Task.Run(() => RunGit(targetDirectory, ["config", "credential.username", preferredAccount]), cancellationToken);
+                if (!savedAccount.Success) return (false, "The repository was cloned, but its Git account choice could not be saved.");
+            }
             return (true, "Repository cloned successfully.");
         }
         catch (Exception ex)

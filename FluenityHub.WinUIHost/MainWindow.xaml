@@ -35,7 +35,7 @@
                                 <PersonPicture
                                     Width="36"
                                     Height="36"
-                                    DisplayName="{TemplateBinding DisplayName}" />
+                                    DisplayName="{TemplateBinding AvatarDisplayName}" />
 
                                 <StackPanel
                                     Grid.Column="2"
@@ -83,9 +83,13 @@
         <TitleBar
             x:Name="AppTitleBar"
             AutomationProperties.Name="FluenityHub title bar"
+            BackRequested="OnTitleBarBackRequested"
+            IsBackButtonVisible="False"
+            IsPaneToggleButtonVisible="True"
+            PaneToggleRequested="OnTitleBarPaneToggleRequested"
             Title="FluenityHub">
             <TitleBar.IconSource>
-                <ImageIconSource ImageSource="/Assets/FluenityHub_Logo.png" />
+                <ImageIconSource ImageSource="/Assets/Square44x44Logo.targetsize-64_altform-unplated.png" />
             </TitleBar.IconSource>
             <TitleBar.RightHeader>
                 <Button
@@ -107,9 +111,7 @@
                         x:Name="TitleBarPersonPicture"
                         Width="32"
                         Height="32"
-                        AutomationProperties.Name="Unity account profile"
-                        FontFamily="Segoe Fluent Icons"
-                        Initials="&#xE77B;" />
+                        AutomationProperties.Name="Unity account profile" />
                     <Button.Flyout>
                         <MenuFlyout
                             x:Name="AccountMenuFlyout"

@@ -32,6 +32,8 @@ public sealed class SourceControlService
         }
 
         if (string.IsNullOrWhiteSpace(token))
+            token = (await GitCredentialManagerService.GetAsync(provider, null, false))?.Password ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(token))
         {
             return (false, string.Empty, [], "Personal Access Token cannot be empty.");
         }
@@ -96,7 +98,7 @@ public sealed class SourceControlService
             else if (provider == "gitlab")
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "https://gitlab.com/api/v4/user");
-                request.Headers.Add("PRIVATE-TOKEN", token);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 using var response = await HttpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -140,6 +142,8 @@ public sealed class SourceControlService
             return (false, string.Empty, NetworkConnectivityService.OfflineMessage);
         }
 
+        if (string.IsNullOrWhiteSpace(token))
+            token = (await GitCredentialManagerService.GetAsync(provider, $"{selectedOwner}/{repoName}", false))?.Password ?? string.Empty;
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repoName))
         {
             return (false, string.Empty, "Token and repository name are required.");
@@ -202,7 +206,7 @@ public sealed class SourceControlService
                 {
                     Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
                 };
-                request.Headers.Add("PRIVATE-TOKEN", token);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 using var response = await HttpClient.SendAsync(request);
                 var respBody = await response.Content.ReadAsStringAsync();
@@ -260,6 +264,9 @@ public sealed class SourceControlService
         }
 
         if (string.IsNullOrWhiteSpace(token))
+            token = (await GitCredentialManagerService.GetAsync(provider, null, false))?.Password ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(token))
         {
             return (false, [], "Personal Access Token cannot be empty.");
         }
@@ -304,7 +311,7 @@ public sealed class SourceControlService
             else if (provider == "gitlab")
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "https://gitlab.com/api/v4/projects?membership=true&per_page=100&order_by=last_activity_at");
-                request.Headers.Add("PRIVATE-TOKEN", token);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 using var response = await HttpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
@@ -349,6 +356,8 @@ public sealed class SourceControlService
             return (false, [new BranchItem(defaultBranch, string.Empty)], NetworkConnectivityService.OfflineMessage);
         }
 
+        if (string.IsNullOrWhiteSpace(token))
+            token = (await GitCredentialManagerService.GetAsync(provider, repoFullName, false))?.Password ?? string.Empty;
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repoFullName))
         {
             return (false, [], "Token and repository name are required.");
@@ -398,7 +407,7 @@ public sealed class SourceControlService
             {
                 string encodedPath = Uri.EscapeDataString(repoFullName);
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"https://gitlab.com/api/v4/projects/{encodedPath}/repository/branches");
-                request.Headers.Add("PRIVATE-TOKEN", token);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 using var response = await HttpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)

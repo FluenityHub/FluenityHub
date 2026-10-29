@@ -14,6 +14,7 @@ public sealed class UnityLogoutSecurityService
     {
         if (!state.IsCliAvailable
             || state.IsLoggedIn
+            || state.SessionState == "unavailable"
             || !_settingsService.GetClearTokensOnLogout())
         {
             return false;

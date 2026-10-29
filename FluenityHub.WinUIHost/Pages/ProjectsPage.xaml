@@ -110,7 +110,7 @@
 
             <!-- Left Group: Search & Refresh -->
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <AutoSuggestBox
+                    <AutoSuggestBox
                     x:Name="SearchBox"
                     Width="240"
                     Height="32"
@@ -120,7 +120,11 @@
                     QueryIcon="Find"
                     QuerySubmitted="OnSearchQuerySubmitted"
                     TextChanged="OnSearchTextChanged"
-                    UpdateTextOnSelect="False" />
+                    UpdateTextOnSelect="False" >
+                        <AutoSuggestBox.KeyboardAccelerators>
+                            <KeyboardAccelerator x:Name="SearchKeyboardAccelerator" Key="F" Modifiers="Control" IsEnabled="False" Invoked="OnSearchAccelerator" />
+                        </AutoSuggestBox.KeyboardAccelerators>
+                    </AutoSuggestBox>
 
                 <Button
                     Height="32"
@@ -589,11 +593,13 @@
                             <Grid
                                 Padding="20,8"
                                 Background="Transparent"
+                                ContextCanceled="OnProjectContextCanceled"
+                                ContextRequested="OnProjectContextRequested"
                                 RightTapped="OnItemRightTapped"
                                 AutomationProperties.HelpText="{x:Bind LaunchStatusText, Mode=OneWay}"
                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
                                 <Grid.ContextFlyout>
-                                    <MenuFlyout>
+                                    <MenuFlyout x:Name="ProjectContextFlyout" x:Load="{x:Bind IsContextMenuLoaded, Mode=OneWay}">
                                         <MenuFlyoutItem
                                             Click="OnContextOpenProjectClick"
                                             KeyboardAcceleratorTextOverride="Enter"
@@ -608,14 +614,14 @@
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem
                                             Click="OnContextOpenFolderClick"
-                                            KeyboardAcceleratorTextOverride="Ctrl+F"
-                                            Text="Show in Explorer"
+                                            KeyboardAcceleratorTextOverride="Ctrl+D"
+                                            Text="Open in File Explorer"
                                             Tag="{x:Bind}">
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE8B7;" />
                                             </MenuFlyoutItem.Icon>
                                             <MenuFlyoutItem.KeyboardAccelerators>
-                                                <KeyboardAccelerator Key="F" Modifiers="Control" />
+                                                <KeyboardAccelerator Key="D" Modifiers="Control" />
                                             </MenuFlyoutItem.KeyboardAccelerators>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem Click="OnContextCommandLineArgumentsClick" Text="Add command line arguments..." Tag="{x:Bind}">
@@ -804,6 +810,12 @@
                                             <MenuFlyoutItem.KeyboardAccelerators>
                                                 <KeyboardAccelerator Key="Delete" />
                                             </MenuFlyoutItem.KeyboardAccelerators>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Click="OnContextProjectPropertiesClick" Text="Properties" Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE90F;" />
+                                            </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
                                     </MenuFlyout>
                                 </Grid.ContextFlyout>
@@ -1014,7 +1026,7 @@
                         HorizontalAlignment="Center"
                         FontSize="40"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        Glyph="&#xE8B7;" />
+                        Glyph="&#xE80F;" />
                     <TextBlock
                         HorizontalAlignment="Center"
                         Style="{StaticResource BodyStrongTextBlockStyle}"

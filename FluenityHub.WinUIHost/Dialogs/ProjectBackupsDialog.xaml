@@ -46,7 +46,7 @@
                                     Click="OnOpenBackupClick"
                                     IsEnabled="{x:Bind IsAvailable}"
                                     Tag="{x:Bind}"
-                                    Text="Open backup folder">
+                                    Text="Open in File Explorer">
                                     <MenuFlyoutItem.Icon>
                                         <FontIcon Glyph="&#xE8B7;" />
                                     </MenuFlyoutItem.Icon>
@@ -100,7 +100,7 @@
                                             Click="OnOpenBackupClick"
                                             IsEnabled="{x:Bind IsAvailable}"
                                             Tag="{x:Bind}"
-                                            Text="Open backup folder">
+                                            Text="Open in File Explorer">
                                             <MenuFlyoutItem.Icon>
                                                 <FontIcon Glyph="&#xE8B7;" />
                                             </MenuFlyoutItem.Icon>

@@ -25,6 +25,7 @@ public sealed partial class NewProjectDialog : ContentDialog
     private bool _isApplyingSavedToken;
     private string? _appliedSavedToken;
     private string? _appliedSavedTokenProvider;
+    private readonly CancellationTokenSource _browserCancellation = new();
 
     public NewProjectDialog(
         IEnumerable<string> installedVersions,
@@ -32,6 +33,7 @@ public sealed partial class NewProjectDialog : ContentDialog
         string? initialVersion = null)
     {
         InitializeComponent();
+        Closed += (_, _) => { _authorizationRequestId++; _browserCancellation.Cancel(); _browserCancellation.Dispose(); };
         _selectedTemplate = selectedTemplate;
         _isSourceControlEnabled = new AppSettingsStore().Load().EnableSourceControl;
 
@@ -295,8 +297,11 @@ public sealed partial class NewProjectDialog : ContentDialog
 
             if (success)
             {
-                if (tag == "gitlab") CredentialService.SaveGitLabToken(token);
-                else CredentialService.SaveGitHubToken(token);
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    if (tag == "gitlab") CredentialService.SaveGitLabToken(token);
+                    else CredentialService.SaveGitHubToken(token);
+                }
 
                 ShowLinkedState(primaryOwner);
             }
@@ -322,6 +327,26 @@ public sealed partial class NewProjectDialog : ContentDialog
                 ValidateInputs(showMessage: false);
             }
         }
+    }
+
+    private async void OnBrowserSignInClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        button.IsEnabled = false;
+        var provider = (SourceControlProviderComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "github";
+        var requestId = ++_authorizationRequestId;
+        try
+        {
+            var credential = await GitCredentialManagerService.GetAsync(provider, null, true, _browserCancellation.Token);
+            if (requestId != _authorizationRequestId) return;
+            if (credential is null) { ShowAuthStatus("Git sign-in was not completed.", true); return; }
+            GitCredentialManagerService.SetAccount(provider, null, credential.UserName);
+            TokenPasswordBox.Password = string.Empty;
+            await ValidateAndApplyTokenAsync(provider, string.Empty);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (requestId == _authorizationRequestId) ShowAuthStatus(ex.Message, true); }
+        finally { button.IsEnabled = true; }
     }
 
     private void SetAuthorizationVisualState(bool isAuthorizing)
@@ -613,9 +638,9 @@ public sealed partial class NewProjectDialog : ContentDialog
         }
 
         if ((provider == "github" || provider == "gitlab") &&
-            (!_isAuthorized || string.IsNullOrWhiteSpace(TokenPasswordBox?.Password)))
+            !_isAuthorized)
         {
-            return "Authorize a personal access token before creating the project.";
+            return "Sign in with your browser or authorize a personal access token before creating the project.";
         }
 
         return null;

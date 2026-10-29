@@ -235,13 +235,28 @@ public sealed partial class AddModulesDialog : ContentDialog
         PrimaryButtonText = agreements.Count > 0 ? "Next" : "Install";
         IsPrimaryButtonEnabled = _installsEditor || selectedModules.Count > 0;
 
+        if (storageError is not null)
+        {
+            ShowStatus("Not enough disk space", storageError, InfoBarSeverity.Warning);
+            IsPrimaryButtonEnabled = false;
+            return;
+        }
+
         if (StatusInfoBar.Title is "Not enough disk space" or "Not enough temporary disk space")
         {
             StatusInfoBar.IsOpen = false;
         }
     }
 
-    private string? GetEditorInstallStorageError() => null;
+    private string? GetEditorInstallStorageError()
+    {
+        var modules = GetSelectedModules();
+        return UnityEditorInstallationService.GetEditorInstallStorageError(
+            _editor.InstallDirectory,
+            new UnityHubLocationSettingsService().GetDownloadLocation(),
+            _editorInstalledSizeBytes + modules.Sum(module => module.InstalledSizeBytes),
+            _editorDownloadSizeBytes + modules.Sum(module => module.DownloadSizeBytes));
+    }
 
     private async void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
@@ -254,7 +269,7 @@ public sealed partial class AddModulesDialog : ContentDialog
                 var storageError = GetEditorInstallStorageError();
                 if (storageError is not null)
                 {
-                    ShowStatus("Not enough temporary disk space", storageError, InfoBarSeverity.Warning);
+                    ShowStatus("Not enough disk space", storageError, InfoBarSeverity.Warning);
                     IsPrimaryButtonEnabled = false;
                     return;
                 }
@@ -457,13 +472,20 @@ public sealed partial class AddModulesDialog : ContentDialog
             .Select(module => module.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return _modules
+        var terms = _modules
             .Where(module => selectedIds.Contains(module.Id))
             .SelectMany(module => module.LicenseTerms)
             .DistinctBy(
                 term => $"{term.Label}\u001f{term.NavigateUri}",
                 StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            .ToList();
+        if (_installsEditor)
+            terms.Insert(0, new UnityLicenseTerm
+            {
+                ModuleId = "unity-editor", ModuleName = "Unity Editor", Label = "Unity Editor Software Terms",
+                NavigateUri = new Uri("https://unity.com/legal/editor-terms-of-service/software")
+            });
+        return terms;
     }
 
     private List<UnityEditorModuleInfo> GetSelectedModules()

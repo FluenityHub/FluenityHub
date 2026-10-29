@@ -16,14 +16,19 @@ public sealed partial class LicensesPage : Page
     private CancellationTokenSource? _accountCancellation;
     private bool _isUnityCliAvailable;
     private bool _isPublishingAccountState;
-    private bool _isInitializingOfflineLaunchSetting;
+    private bool _isInitializingSettings;
+    private bool _hideAccountAvatar;
+    private string _accountAvatarDisplayName = string.Empty;
 
     public LicensesPage()
     {
         InitializeComponent();
-        _isInitializingOfflineLaunchSetting = true;
-        LaunchEditorInOfflineModeToggleSwitch.IsOn = _settingsStore.Load().LaunchEditorInOfflineMode;
-        _isInitializingOfflineLaunchSetting = false;
+        _isInitializingSettings = true;
+        var settings = _settingsStore.Load();
+        LaunchEditorInOfflineModeToggleSwitch.IsOn = settings.LaunchEditorInOfflineMode;
+        _hideAccountAvatar = settings.HideAccountAvatar;
+        HideAccountAvatarToggleSwitch.IsOn = _hideAccountAvatar;
+        _isInitializingSettings = false;
         SettingsBreadcrumbBar.ItemsSource = new[] { "Settings", "Unity licenses" };
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
@@ -31,7 +36,7 @@ public sealed partial class LicensesPage : Page
 
     private void OnLaunchEditorInOfflineModeToggled(object sender, RoutedEventArgs e)
     {
-        if (_isInitializingOfflineLaunchSetting)
+        if (_isInitializingSettings)
         {
             return;
         }
@@ -39,6 +44,31 @@ public sealed partial class LicensesPage : Page
         var settings = _settingsStore.Load();
         settings.LaunchEditorInOfflineMode = LaunchEditorInOfflineModeToggleSwitch.IsOn;
         _settingsStore.Save(settings);
+    }
+
+    private void OnHideAccountAvatarToggled(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializingSettings)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = _settingsStore.Load();
+            settings.HideAccountAvatar = HideAccountAvatarToggleSwitch.IsOn;
+            _settingsStore.Save(settings);
+            _hideAccountAvatar = settings.HideAccountAvatar;
+            UnityAccountPersonPicture.DisplayName = _hideAccountAvatar ? string.Empty : _accountAvatarDisplayName;
+            MainWindow.Instance?.SetAccountAvatarHidden(_hideAccountAvatar);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _isInitializingSettings = true;
+            HideAccountAvatarToggleSwitch.IsOn = _hideAccountAvatar;
+            _isInitializingSettings = false;
+            ShowUnityAccountResult("Profile display could not be changed", ex.Message, InfoBarSeverity.Error);
+        }
     }
 
     private void OnSettingsBreadcrumbItemClicked(
@@ -234,7 +264,8 @@ public sealed partial class LicensesPage : Page
         var identity = !string.IsNullOrWhiteSpace(state.DisplayName)
             ? state.DisplayName
             : state.Email;
-        UnityAccountPersonPicture.DisplayName = state.IsLoggedIn ? identity : string.Empty;
+        _accountAvatarDisplayName = state.IsLoggedIn ? identity : string.Empty;
+        UnityAccountPersonPicture.DisplayName = _hideAccountAvatar ? string.Empty : _accountAvatarDisplayName;
         UnityAccountNameTextBlock.Text = state.IsLoggedIn
             ? (!string.IsNullOrWhiteSpace(state.DisplayName) ? state.DisplayName : "Unity ID")
             : "Unity ID";
@@ -375,6 +406,8 @@ public sealed partial class LicensesPage : Page
                 _loadCancellation.Token);
 
             // Licensing client sub-item
+            LicensingClientCard.Header = snapshot.ClientVersion.StartsWith("Unity CLI", StringComparison.Ordinal)
+                ? "Licensing provider" : "Licensing client";
             LicensingClientPathTextBlock.Text = snapshot.IsClientAvailable
                 ? snapshot.ClientPath
                 : "Not installed";

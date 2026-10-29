@@ -72,9 +72,10 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void OnNavigationViewBackRequested(
-        NavigationView sender,
-        NavigationViewBackRequestedEventArgs args)
+    public void ToggleNavigationPane()
+        => AppNavigationView.IsPaneOpen = !AppNavigationView.IsPaneOpen;
+
+    public void GoBack()
     {
         if (ContentFrame.CanGoBack)
         {
@@ -82,6 +83,17 @@ public sealed partial class MainPage : Page
             {
                 Effect = SlideNavigationTransitionEffect.FromLeft
             });
+        }
+    }
+
+    private void OnBackKeyboardAcceleratorInvoked(
+        Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ContentFrame.CanGoBack)
+        {
+            GoBack();
+            args.Handled = true;
         }
     }
 
@@ -137,16 +149,12 @@ public sealed partial class MainPage : Page
             ContentFrame.Navigate(pageType, null, transitionInfo);
         }
 
-        ContentFrame.BackStack.Clear();
         UpdateBackButton();
     }
 
     private void UpdateBackButton()
     {
-        AppNavigationView.IsBackEnabled = ContentFrame.CanGoBack;
-        AppNavigationView.IsBackButtonVisible = ContentFrame.CanGoBack
-            ? NavigationViewBackButtonVisible.Visible
-            : NavigationViewBackButtonVisible.Collapsed;
+        MainWindow.Instance?.SetNavigationBackState(ContentFrame.CanGoBack);
     }
 
     private NavigationViewItem? FindNavigationItem(string tag)

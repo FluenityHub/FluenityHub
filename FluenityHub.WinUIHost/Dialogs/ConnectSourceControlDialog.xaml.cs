@@ -26,10 +26,12 @@ public sealed partial class ConnectSourceControlDialog : ContentDialog
     private bool _isApplyingSavedToken;
     private string? _appliedSavedToken;
     private string? _appliedSavedTokenProvider;
+    private readonly CancellationTokenSource _browserCancellation = new();
 
     public ConnectSourceControlDialog(UnityProjectInfo project)
     {
         InitializeComponent();
+        Closed += (_, _) => { _authorizationRequestId++; _browserCancellation.Cancel(); _browserCancellation.Dispose(); };
         _project = project;
 
         RepoNameTextBox.Text = project.Title;
@@ -207,21 +209,41 @@ public sealed partial class ConnectSourceControlDialog : ContentDialog
     }
 
     private async void OnAuthorizeClick(object sender, RoutedEventArgs e)
+        => await AuthorizeAsync(false);
+
+    private async void OnBrowserSignInClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        button.IsEnabled = false;
+        try { await AuthorizeAsync(true); }
+        finally { button.IsEnabled = true; }
+    }
+
+    private async Task AuthorizeAsync(bool useCredentialManager)
     {
         var requestId = 0;
         try
         {
-            var token = TokenPasswordBox.Password;
+            var token = useCredentialManager ? string.Empty : TokenPasswordBox.Password;
             var provider = (ProviderComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "github";
             SelectedProvider = provider;
+            requestId = ++_authorizationRequestId;
 
-            if (string.IsNullOrWhiteSpace(token))
+            if (useCredentialManager)
+            {
+                var account = await GitCredentialManagerService.GetAsync(provider, null, true, _browserCancellation.Token);
+                if (requestId != _authorizationRequestId) return;
+                if (account is null) { ShowStatus("Git sign-in was not completed.", InfoBarSeverity.Warning); return; }
+                GitCredentialManagerService.SetAccount(provider, null, account.UserName);
+                TokenPasswordBox.Password = string.Empty;
+                requestId = ++_authorizationRequestId;
+            }
+            else if (string.IsNullOrWhiteSpace(token))
             {
                 ShowStatus("Please enter your Personal Access Token.", InfoBarSeverity.Warning);
                 return;
             }
 
-            requestId = ++_authorizationRequestId;
             if (AuthorizeButton is not null) AuthorizeButton.IsEnabled = false;
             SetAuthorizationVisualState(true);
             var (success, primaryUser, owners, error) =
@@ -247,11 +269,11 @@ public sealed partial class ConnectSourceControlDialog : ContentDialog
                 if (TokenUnlinkedPanel is not null) TokenUnlinkedPanel.Visibility = Visibility.Collapsed;
                 if (TokenLinkedPanel is not null) TokenLinkedPanel.Visibility = Visibility.Visible;
                 if (TokenUserTextBlock is not null) TokenUserTextBlock.Text = $"Connected as @{primaryUser}";
-                if (provider == "github")
+                if (provider == "github" && !useCredentialManager)
                 {
                     CredentialService.SaveGitHubToken(token);
                 }
-                else
+                else if (!useCredentialManager)
                 {
                     CredentialService.SaveGitLabToken(token);
                 }
@@ -376,10 +398,10 @@ public sealed partial class ConnectSourceControlDialog : ContentDialog
             var provider = (ProviderComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "github";
             var token = TokenPasswordBox.Password;
 
-            if (provider != "git" && (!_isAuthorized || string.IsNullOrWhiteSpace(token)))
+            if (provider != "git" && !_isAuthorized)
             {
                 args.Cancel = true;
-                ShowStatus("Please click 'Authorize' to authenticate your Personal Access Token first.", InfoBarSeverity.Warning);
+                ShowStatus("Sign in with your browser or authorize a personal access token first.", InfoBarSeverity.Warning);
                 return;
             }
 

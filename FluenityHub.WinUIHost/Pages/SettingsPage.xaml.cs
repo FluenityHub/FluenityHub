@@ -14,7 +14,40 @@ namespace FluenityHub_WinUIHost.Pages;
 
 public sealed partial class SettingsPage : Page
 {
+    private async void OnManageGitAccountsClick(object sender, RoutedEventArgs e)
+    {
+        await new Dialogs.GitAccountsDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme }.ShowAsync();
+        _settings = _settingsStore.Load();
+    }
     private readonly AppSettingsStore _settingsStore = new();
+    private void OnComponentVersionsLoaded(object sender, RoutedEventArgs e)
+    {
+        var cli = _unityCliToolService.GetStatus();
+        ComponentVersionsTextBlock.Text =
+            $"{System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} ({System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture})\n" +
+            $"WinUI projection: {typeof(Microsoft.UI.Xaml.Application).Assembly.GetName().Version}\n" +
+            $"Microsoft.Data.Sqlite: {typeof(Microsoft.Data.Sqlite.SqliteConnection).Assembly.GetName().Version}\n" +
+            $"Unity CLI: {cli.Version ?? "Not installed"}\n{cli.ExecutablePath}";
+    }
+
+    private async void OnThirdPartyNoticesClick(object sender, RoutedEventArgs e)
+    {
+        string text;
+        try
+        {
+            text = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Assets", "ThirdPartyNotices.md"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowStatus($"Notices could not be opened: {ex.Message}", InfoBarSeverity.Error);
+            return;
+        }
+        await new ContentDialog
+        {
+            Title = "Third-party notices", CloseButtonText = "Close", XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
+            Content = new ScrollViewer { MaxHeight = 420, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, MaxWidth = 520 } }
+        }.ShowAsync();
+    }
     private readonly SourceControlService _sourceControlService = new();
     private readonly UnityCliToolService _unityCliToolService = new();
     private readonly UnityHubTemplateSettingsService _templateSettingsService = new();

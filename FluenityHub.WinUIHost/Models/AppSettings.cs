@@ -8,9 +8,11 @@ public sealed class AppSettings
     public int MinimizeBehavior { get; set; } = 1;
     public bool LowerPriorityWhenUnityOpens { get; set; } = true;
     public bool EnableSourceControl { get; set; } = true;
+    public Dictionary<string, string> GitAccounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool ExplorerContextMenuEnabled { get; set; } = false;
     public bool AutoResetSandboxOnClose { get; set; } = false;
     public bool LaunchEditorInOfflineMode { get; set; } = false;
+    public bool HideAccountAvatar { get; set; } = false;
     public List<string> CustomFavoritePaths { get; set; } = [];
     public List<string> CustomEditorPaths { get; set; } = [];
     public List<string> CustomTemplatePaths { get; set; } = [];

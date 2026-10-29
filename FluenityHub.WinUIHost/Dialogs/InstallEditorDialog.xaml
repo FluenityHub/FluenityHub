@@ -261,11 +261,13 @@
             </InfoBar>
         </Grid>
 
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="24">
         <HyperlinkButton
-            Grid.Row="3"
             Padding="0"
             HorizontalAlignment="Left"
             Content="Unity beta program"
             Click="OnBetaProgramClick" />
+        <HyperlinkButton Padding="0" Content="Install from link" Click="OnInstallFromLinkClick" AutomationProperties.Name="Install Editor from Unity link" />
+        </StackPanel>
     </Grid>
 </ContentDialog>

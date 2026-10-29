@@ -150,13 +150,12 @@ public sealed class UnityProjectShareLinkService
     /// <summary>
     /// Gets a current Unity gateway token for a user-requested share action.
     /// Unity Cloud app-linking cannot use the Editor OAuth token, so this
-    /// method never falls back to it. A gate prevents concurrent menu actions
-    /// from starting competing browser sign-in sessions.
+    /// method never falls back to it or starts a browser sign-in implicitly.
     /// </summary>
     private async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
         EnsureCloudAuthenticationAsync(CancellationToken cancellationToken)
     {
-        if (TryGetUsableCloudToken(out var token, out var lastError))
+        if (TryGetUsableCloudToken(out var token, out _))
         {
             return (token, string.Empty);
         }
@@ -164,40 +163,9 @@ public sealed class UnityProjectShareLinkService
         await CloudAuthenticationGate.WaitAsync(cancellationToken);
         try
         {
-            // A previous request may have completed the browser flow while
-            // this one was waiting for the gate.
-            if (TryGetUsableCloudToken(out token, out lastError))
+            if (TryGetUsableCloudToken(out token, out _))
             {
                 return (token, string.Empty);
-            }
-
-            if (UnitySharedAuthService.TryIsHubAccountActive(out var hubOwnsSession, out _)
-                && hubOwnsSession)
-            {
-                return (null,
-                    "Unity Hub is refreshing the active account. Wait a moment and retry so FluenityHub does not start a competing sign-in session.");
-            }
-
-            var authService = new UnityCliAuthService();
-            UnityCliAuthState state;
-            try
-            {
-                state = await authService.GetStatusAsync(cancellationToken);
-                if (!state.IsLoggedIn)
-                {
-                    state = await authService.LoginAsync(cancellationToken);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return (null, "Creating the Unity project link was canceled.");
-            }
-
-            if (!state.IsLoggedIn)
-            {
-                return (null, string.IsNullOrWhiteSpace(state.Message)
-                    ? "Sign in to Unity and retry creating the project link."
-                    : state.Message);
             }
 
             return await ExchangeUnityGatewayTokenAsync(cancellationToken);
@@ -220,8 +188,8 @@ public sealed class UnityProjectShareLinkService
             || sharedToken is null)
         {
             return (null, string.IsNullOrWhiteSpace(errorMessage)
-                ? "Unity sign-in could not be read. Sign in again and retry."
-                : errorMessage);
+                ? "Unity Cloud sharing is unavailable for the current credential provider. Use Unity Hub to create this link."
+                : "Unity Cloud sharing cannot use this account credential. Use Unity Hub to create this link.");
         }
 
         if (!UnitySharedAuthService.IsAccessTokenUsable(sharedToken))
@@ -335,7 +303,7 @@ public sealed class UnityProjectShareLinkService
             || string.Equals(provider, SourceControlDetectionService.GitLabProvider, StringComparison.OrdinalIgnoreCase))
         {
             var url = NormalizeGitRemote(project.SourceControlRemoteUrl)
-                      ?? BuildConfiguredGitRemote(project, provider!);
+                      ?? NormalizeGitRemote(BuildConfiguredGitRemote(project, provider!));
             if (url is null)
             {
                 return false;
@@ -405,10 +373,14 @@ public sealed class UnityProjectShareLinkService
         }
 
         if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri)
-            || string.IsNullOrWhiteSpace(uri.Host))
+            || uri.Host is not ("github.com" or "gitlab.com")
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !uri.IsDefaultPort || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
         {
             return null;
         }
+        if (remote.TrimStart().StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(uri.UserInfo)) return null;
 
         var builder = new UriBuilder(Uri.UriSchemeHttps, uri.Host)
         {

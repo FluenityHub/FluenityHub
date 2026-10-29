@@ -165,9 +165,9 @@
                             Padding="0,2"
                             HorizontalAlignment="Left"
                             AutomationProperties.AutomationId="OpenTemplateLocationButton"
-                            AutomationProperties.Name="Open template file location"
+                            AutomationProperties.Name="Open template in File Explorer"
                             Click="OnOpenLocationClick"
-                            Content="Open file location" />
+                            Content="Open in File Explorer" />
                     </StackPanel>
 
                     <StackPanel

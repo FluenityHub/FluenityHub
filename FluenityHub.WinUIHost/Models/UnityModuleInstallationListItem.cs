@@ -146,7 +146,7 @@ public sealed class UnityModuleInstallationListItem : INotifyPropertyChanged
     {
         _snapshot = snapshot;
         IconPath = string.IsNullOrWhiteSpace(iconPath)
-            ? "ms-appx:///Assets/FluenityHub_Logo.png"
+            ? "ms-appx:///Assets/Square44x44Logo.targetsize-256_altform-unplated.png"
             : iconPath;
         Modules = new ObservableCollection<UnityModuleProgressListItem>(
             snapshot.Modules.Select(module => new UnityModuleProgressListItem(module)));

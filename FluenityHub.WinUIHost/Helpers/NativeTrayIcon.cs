@@ -30,7 +30,6 @@ public sealed class NativeTrayIcon : IDisposable
 
     private const uint MF_STRING = 0x00000000;
     private const uint MF_SEPARATOR = 0x00000800;
-    private const uint MF_GRAYED = 0x00000001;
     private const uint TPM_RETURNCMD = 0x0100;
     private const uint TPM_RIGHTBUTTON = 0x0002;
 
@@ -211,12 +210,11 @@ public sealed class NativeTrayIcon : IDisposable
 
             if (recentProjects.Count > 0)
             {
-                AppendMenu(hMenu, MF_GRAYED, UIntPtr.Zero, "Recent Projects");
                 uint cmdId = 2001;
                 foreach (var project in recentProjects.Take(5))
                 {
                     projectMap[cmdId] = project;
-                    AppendMenu(hMenu, MF_STRING, (UIntPtr)cmdId, $"   {project.Title} ({project.Version})");
+                    AppendMenu(hMenu, MF_STRING, (UIntPtr)cmdId, $"{project.Title} ({project.Version})");
                     cmdId++;
                 }
                 AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, string.Empty);
