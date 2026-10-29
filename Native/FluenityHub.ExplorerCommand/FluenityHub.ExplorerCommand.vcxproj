@@ -33,18 +33,22 @@
       <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>ole32.lib;shell32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ModuleDefinitionFile>$(ProjectDir)ExplorerCommand.def</ModuleDefinitionFile>
+      <GenerateDebugInformation Condition="'$(Configuration)'=='Debug'">true</GenerateDebugInformation>
+      <GenerateDebugInformation Condition="'$(Configuration)'!='Debug'">false</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ExplorerCommand.cpp" />
     <ResourceCompile Include="ExplorerCommand.rc" />
     <ClInclude Include="resource.h" />
+    <None Include="ExplorerCommand.def" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="$(WindowsSdkNuGetRoot)\microsoft.windows.sdk.cpp\$(WindowsSdkPackageVersion)\build\Microsoft.Windows.SDK.cpp.targets" />

@@ -1,0 +1,4 @@
+LIBRARY FluenityHubExplorerCommand
+EXPORTS
+    DllCanUnloadNow PRIVATE
+    DllGetClassObject PRIVATE

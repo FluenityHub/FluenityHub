@@ -25,7 +25,7 @@ public sealed record AppUpdateInfo(
 /// </summary>
 public static class AppUpdateService
 {
-    public const string CurrentVersion = "1.0.0";
+    public const string CurrentVersion = "1.1.0";
     
     private const string GitHubRepoOwner = "FluenityHub";
     private const string GitHubRepoName = "FluenityHub";

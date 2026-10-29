@@ -13,7 +13,7 @@
   <Identity
     Name="B2EEE620-A605-4BDE-855D-C1E1A7E311D0"
     Publisher="CN=FluenityHub"
-    Version="1.0.0.0" />
+    Version="1.1.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="B2EEE620-A605-4BDE-855D-C1E1A7E311D0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

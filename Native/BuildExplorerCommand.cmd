@@ -20,6 +20,11 @@ if errorlevel 1 exit /b %errorlevel%
 
 if exist "%llvm%\bin\clang-cl.exe" goto local_toolchain
 
+if defined VSINSTALLDIR if exist "%VSINSTALLDIR%\Common7\Tools\VsDevCmd.bat" (
+  set "vsdir=%VSINSTALLDIR%"
+  goto visual_studio_toolchain
+)
+
 set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%vswhere%" (
   echo Install the Visual Studio Desktop C++ tools or provide the project-local LLVM toolchain under .tools.
@@ -30,9 +35,12 @@ if not defined vsdir (
   echo Install the Visual Studio Desktop C++ tools or provide the project-local LLVM toolchain under .tools.
   exit /b 1
 )
+:visual_studio_toolchain
 call "%vsdir%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
 if errorlevel 1 exit /b %errorlevel%
-msbuild "%source%\FluenityHub.ExplorerCommand.vcxproj" /t:Build /p:Configuration=%~2 /p:Platform=x64 /v:minimal
+set "toolset=v143"
+if "%VisualStudioVersion:~0,2%"=="18" set "toolset=v145"
+msbuild "%source%\FluenityHub.ExplorerCommand.vcxproj" /t:Build /p:Configuration=%~2 /p:Platform=x64 /p:PlatformToolset=%toolset% /v:minimal
 exit /b %errorlevel%
 
 :local_toolchain
