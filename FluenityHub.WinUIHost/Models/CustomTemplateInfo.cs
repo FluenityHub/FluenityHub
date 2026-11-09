@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -24,8 +25,9 @@ public sealed class TemplateTagBadgeViewModel
     }
 }
 
-public sealed class CustomTemplateInfo
+public sealed class CustomTemplateInfo : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -77,6 +79,25 @@ public sealed class CustomTemplateInfo
 
     [JsonIgnore]
     public bool IsEditorMissing => !IsEditorInstalled;
+
+    private bool _isEditorWarningDismissed;
+    [JsonIgnore]
+    public bool IsEditorWarningDismissed
+    {
+        get => _isEditorWarningDismissed;
+        set
+        {
+            if (_isEditorWarningDismissed == value) return;
+            _isEditorWarningDismissed = value;
+            PropertyChanged?.Invoke(this, new(nameof(IsEditorWarningDismissed)));
+            PropertyChanged?.Invoke(this, new(nameof(ShowMissingEditorWarning)));
+            PropertyChanged?.Invoke(this, new(nameof(EditorWarningActionText)));
+        }
+    }
+    [JsonIgnore]
+    public bool ShowMissingEditorWarning => IsEditorMissing && !IsEditorWarningDismissed;
+    [JsonIgnore]
+    public string EditorWarningActionText => IsEditorWarningDismissed ? "Show Editor warning" : "Dismiss Editor warning";
 
     [JsonIgnore]
     public string EditorStatusLabel => IsEditorInstalled

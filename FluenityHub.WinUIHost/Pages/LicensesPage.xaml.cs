@@ -14,6 +14,7 @@ public sealed partial class LicensesPage : Page
     private readonly AppSettingsStore _settingsStore = new();
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _accountCancellation;
+    private CancellationTokenSource? _floatingServerCancellation;
     private bool _isUnityCliAvailable;
     private bool _isPublishingAccountState;
     private bool _isInitializingSettings;
@@ -111,6 +112,33 @@ public sealed partial class LicensesPage : Page
         _accountCancellation?.Cancel();
         _accountCancellation?.Dispose();
         _accountCancellation = null;
+        _floatingServerCancellation?.Cancel();
+    }
+
+    private async void OnCheckFloatingServerClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || _floatingServerCancellation is not null) return;
+        using var cancellation = new CancellationTokenSource();
+        _floatingServerCancellation = cancellation;
+        button.IsEnabled = false;
+        FloatingServerStatusTextBlock.Text = "Checking license server...";
+        try
+        {
+            FloatingServerStatusTextBlock.Text = await UnityLicensingService.GetFloatingServerStatusAsync(cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            FloatingServerStatusTextBlock.Text = "License server check canceled.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            FloatingServerStatusTextBlock.Text = "The license server status could not be checked. Check Unity CLI and try again.";
+        }
+        finally
+        {
+            _floatingServerCancellation = null;
+            button.IsEnabled = true;
+        }
     }
 
     private async void OnAddLicenseClick(object sender, RoutedEventArgs e)

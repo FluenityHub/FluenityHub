@@ -28,7 +28,7 @@ internal static class UnityCliCommandService
             RedirectStandardError = true,
             WorkingDirectory = workingDirectory ?? AppContext.BaseDirectory
         };
-        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
+        UnityCliPrivacy.Apply(startInfo);
         startInfo.ArgumentList.Add("--format");
         startInfo.ArgumentList.Add("json");
         startInfo.ArgumentList.Add("--non-interactive");

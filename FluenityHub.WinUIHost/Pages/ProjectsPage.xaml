@@ -95,11 +95,16 @@
         </Grid.RowDefinitions>
 
         <!-- Page Header Title -->
-        <TextBlock
-            Grid.Row="0"
-            Margin="0,0,0,16"
-            Style="{StaticResource TitleTextBlockStyle}"
-            Text="Projects" />
+        <StackPanel Grid.Row="0">
+            <TextBlock Margin="0,0,0,16" Style="{StaticResource TitleTextBlockStyle}" Text="Projects" />
+            <InfoBar x:Name="WarningUndoInfoBar" Margin="0,0,0,12" IsClosable="True" IsOpen="False"
+                Visibility="{x:Bind WarningUndoInfoBar.IsOpen, Mode=OneWay}"
+                Message="Editor warning dismissed.">
+                <InfoBar.ActionButton>
+                    <Button Content="Undo" Click="OnUndoWarningClick" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
 
         <!-- Command & Search Header Bar -->
         <Grid Grid.Row="1" Margin="0,0,0,16">
@@ -495,6 +500,7 @@
                 <!-- Project List -->
                 <ListView
                     x:Name="ProjectsListView"
+                    x:Load="True"
                     Grid.Row="1"
                     IsItemClickEnabled="True"
                     ItemClick="OnProjectItemClick"
@@ -611,6 +617,15 @@
                                             <MenuFlyoutItem.KeyboardAccelerators>
                                                 <KeyboardAccelerator Key="Enter" />
                                             </MenuFlyoutItem.KeyboardAccelerators>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Click="OnEditorWarningClick"
+                                            Tag="{x:Bind}"
+                                            Text="{x:Bind EditorWarningActionText, Mode=OneWay}"
+                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsEditorMissing), Mode=OneWay}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE7BA;" />
+                                            </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
                                         <MenuFlyoutItem
                                             Click="OnContextOpenFolderClick"
@@ -799,6 +814,12 @@
                                                 <FontIcon Glyph="&#xE8AC;" />
                                             </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
+                                        <MenuFlyoutItem Click="OnContextProjectPropertiesClick" Text="Properties" Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon Glyph="&#xE90F;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutSeparator />
                                         <MenuFlyoutItem
                                             Click="OnContextRemoveProjectClick"
                                             KeyboardAcceleratorTextOverride="Del"
@@ -810,12 +831,6 @@
                                             <MenuFlyoutItem.KeyboardAccelerators>
                                                 <KeyboardAccelerator Key="Delete" />
                                             </MenuFlyoutItem.KeyboardAccelerators>
-                                        </MenuFlyoutItem>
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Click="OnContextProjectPropertiesClick" Text="Properties" Tag="{x:Bind}">
-                                            <MenuFlyoutItem.Icon>
-                                                <FontIcon Glyph="&#xE90F;" />
-                                            </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
                                     </MenuFlyout>
                                 </Grid.ContextFlyout>
@@ -954,7 +969,7 @@
                                             Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
                                             CornerRadius="{ThemeResource ControlCornerRadius}"
                                             ToolTipService.ToolTip="Unity Editor version is not installed"
-                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(IsEditorMissing), Mode=OneWay}">
+                                            Visibility="{x:Bind local:ProjectsPage.BoolToVisibility(ShowMissingEditorWarning), Mode=OneWay}">
                                             <TextBlock
                                                 VerticalAlignment="Center"
                                                 FontSize="10"

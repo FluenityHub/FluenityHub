@@ -263,6 +263,13 @@
                             Style="{StaticResource CaptionTextBlockStyle}"
                             TextWrapping="Wrap" />
                     </controls:SettingsCard>
+                    <controls:SettingsCard Header="Floating license server">
+                        <controls:SettingsCard.Description>
+                            <TextBlock x:Name="FloatingServerStatusTextBlock" Text="Check whether your organization’s license server is reachable."
+                                Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
+                        </controls:SettingsCard.Description>
+                        <Button Content="Check status" Click="OnCheckFloatingServerClick" />
+                    </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
 

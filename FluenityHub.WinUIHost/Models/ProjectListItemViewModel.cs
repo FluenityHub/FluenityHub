@@ -311,12 +311,29 @@ public sealed class ProjectListItemViewModel : INotifyPropertyChanged
                 _isEditorInstalled = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsEditorMissing));
+                OnPropertyChanged(nameof(ShowMissingEditorWarning));
                 OnPropertyChanged(nameof(EditorStatusLabel));
             }
         }
     }
 
     public bool IsEditorMissing => !IsEditorInstalled;
+
+    private bool _isEditorWarningDismissed;
+    public bool IsEditorWarningDismissed
+    {
+        get => _isEditorWarningDismissed;
+        set
+        {
+            if (_isEditorWarningDismissed == value) return;
+            _isEditorWarningDismissed = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowMissingEditorWarning));
+            OnPropertyChanged(nameof(EditorWarningActionText));
+        }
+    }
+    public bool ShowMissingEditorWarning => IsEditorMissing && !IsEditorWarningDismissed;
+    public string EditorWarningActionText => IsEditorWarningDismissed ? "Show Editor warning" : "Dismiss Editor warning";
 
     public string EditorStatusLabel => IsEditorInstalled ? "Editor Installed" : "Editor Missing";
 

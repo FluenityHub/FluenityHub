@@ -20,34 +20,6 @@ public sealed partial class SettingsPage : Page
         _settings = _settingsStore.Load();
     }
     private readonly AppSettingsStore _settingsStore = new();
-    private void OnComponentVersionsLoaded(object sender, RoutedEventArgs e)
-    {
-        var cli = _unityCliToolService.GetStatus();
-        ComponentVersionsTextBlock.Text =
-            $"{System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} ({System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture})\n" +
-            $"WinUI projection: {typeof(Microsoft.UI.Xaml.Application).Assembly.GetName().Version}\n" +
-            $"Microsoft.Data.Sqlite: {typeof(Microsoft.Data.Sqlite.SqliteConnection).Assembly.GetName().Version}\n" +
-            $"Unity CLI: {cli.Version ?? "Not installed"}\n{cli.ExecutablePath}";
-    }
-
-    private async void OnThirdPartyNoticesClick(object sender, RoutedEventArgs e)
-    {
-        string text;
-        try
-        {
-            text = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Assets", "ThirdPartyNotices.md"));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowStatus($"Notices could not be opened: {ex.Message}", InfoBarSeverity.Error);
-            return;
-        }
-        await new ContentDialog
-        {
-            Title = "Third-party notices", CloseButtonText = "Close", XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
-            Content = new ScrollViewer { MaxHeight = 420, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, MaxWidth = 520 } }
-        }.ShowAsync();
-    }
     private readonly SourceControlService _sourceControlService = new();
     private readonly UnityCliToolService _unityCliToolService = new();
     private readonly UnityHubTemplateSettingsService _templateSettingsService = new();
@@ -72,6 +44,9 @@ public sealed partial class SettingsPage : Page
         try
         {
             _settings = _settingsStore.Load();
+
+            RestoreWarningsButton.IsEnabled = _settings.DismissedWarnings.Count > 0;
+            ConcurrentDownloadsNumberBox.Value = _unityHubProjectSettingsService.GetConcurrentDownloads();
 
             if (AppThemeComboBox is not null)
             {
@@ -148,6 +123,38 @@ public sealed partial class SettingsPage : Page
 
         SaveSettings();
         MainWindow.Instance?.SetAppTheme(themeTag);
+    }
+
+    private void OnRestoreWarningsClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _settingsStore.UpdatePreferences(settings => settings.DismissedWarnings.Clear());
+            RestoreWarningsButton.IsEnabled = false;
+            ShowStatus("Project and template warnings restored.", InfoBarSeverity.Success);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowStatus($"Warnings could not be restored: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private void OnConcurrentDownloadsChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_isInitializing || double.IsNaN(args.NewValue)) return;
+        var count = (int)Math.Clamp(Math.Round(args.NewValue), 2, 20);
+        try
+        {
+            _unityHubProjectSettingsService.SetConcurrentDownloads(count);
+            if (sender.Value != count) sender.Value = count;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            _isInitializing = true;
+            sender.Value = args.OldValue;
+            _isInitializing = false;
+            ShowStatus($"The download setting could not be saved: {ex.Message}", InfoBarSeverity.Error);
+        }
     }
 
     private void OnOpenUnityLicensesClick(object sender, RoutedEventArgs e)
@@ -1011,11 +1018,6 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void OnOpenDocsClick(object sender, RoutedEventArgs e)
-    {
-        OpenUrl("https://learn.microsoft.com/windows/apps/winui/winui3/");
-    }
-
     private void OnOpenUnityWebsiteClick(Microsoft.UI.Xaml.Documents.Hyperlink sender, Microsoft.UI.Xaml.Documents.HyperlinkClickEventArgs args)
     {
         OpenUrl("https://unity.com/");
@@ -1024,11 +1026,6 @@ public sealed partial class SettingsPage : Page
     private void OnOpenGitHubClick(object sender, RoutedEventArgs e)
     {
         OpenUrl("https://github.com/FluenityHub/FluenityHub/issues/new/choose");
-    }
-
-    private void OnOpenCommunityToolkitClick(object sender, RoutedEventArgs e)
-    {
-        OpenUrl("https://github.com/CommunityToolkit/Windows");
     }
 
     private void OpenUrl(string url)
@@ -1168,6 +1165,8 @@ public sealed partial class SettingsPage : Page
         SettingsUpdateInfoBar.Visibility = Visibility.Visible;
         SettingsUpdateInfoBar.IsOpen = true;
 
+        if (showActions) return;
+
         try
         {
             await Task.Delay(5000, token);
@@ -1197,23 +1196,20 @@ public sealed partial class SettingsPage : Page
             var updateInfo = await AppUpdateService.CheckForUpdatesAsync();
             _settingsUpdateInfo = updateInfo;
 
-            if (!string.IsNullOrWhiteSpace(updateInfo.ErrorMessage))
+            if (updateInfo.HasUpdate)
             {
                 ShowSettingsUpdateInfoBar(
-                    InfoBarSeverity.Warning,
-                    "Unable to check for updates",
-                    updateInfo.ErrorMessage,
-                    showActions: false);
-            }
-            else if (updateInfo.HasUpdate)
-            {
-                ShowSettingsUpdateInfoBar(
-                    InfoBarSeverity.Success,
+                    updateInfo.DownloadUrl is null ? InfoBarSeverity.Warning : InfoBarSeverity.Informational,
                     $"FluenityHub v{updateInfo.LatestVersion} is available",
-                    string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
-                        ? "A new version of FluenityHub is available with new features and performance improvements."
-                        : updateInfo.ReleaseTitle,
+                    updateInfo.ErrorMessage ?? (string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
+                        ? "A new version of FluenityHub is available."
+                        : updateInfo.ReleaseTitle),
                     showActions: true);
+                SettingsInstallUpdateBtn.Visibility = updateInfo.DownloadUrl is null ? Visibility.Collapsed : Visibility.Visible;
+            }
+            else if (!string.IsNullOrWhiteSpace(updateInfo.ErrorMessage))
+            {
+                ShowSettingsUpdateInfoBar(InfoBarSeverity.Warning, "Unable to check for updates", updateInfo.ErrorMessage, showActions: false);
             }
             else
             {
@@ -1244,10 +1240,9 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void OnSettingsInstallUpdateClick(object sender, RoutedEventArgs e)
+    private async void OnSettingsInstallUpdateClick(object sender, RoutedEventArgs e)
     {
-        var targetUrl = _settingsUpdateInfo?.DownloadUrl ?? _settingsUpdateInfo?.ReleaseUrl ?? "https://github.com/FluenityHub/FluenityHub/releases";
-        OpenUrl(targetUrl);
+        if (_settingsUpdateInfo is { } update) await Dialogs.AppUpdateDialog.ShowAsync(this, update);
     }
 
     private void OnSettingsSeeChangesClick(object sender, RoutedEventArgs e)

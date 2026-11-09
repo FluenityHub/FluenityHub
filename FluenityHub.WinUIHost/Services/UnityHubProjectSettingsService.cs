@@ -133,6 +133,31 @@ public sealed class UnityHubProjectSettingsService
         WriteObjectAtomically(UserSettingsFilePath, root, writeIndented: true);
     }
 
+    public int GetConcurrentDownloads() => ReadConcurrentDownloads(ReadObject(UserSettingsFilePath));
+
+    internal static int ReadConcurrentDownloads(JsonObject? root)
+        => root?["download"]?["maxConcurrentDownloads"] is JsonValue value
+            && value.TryGetValue<int>(out var count) ? Math.Clamp(count, 2, 20) : 2;
+
+    public void SetConcurrentDownloads(int count)
+    {
+        var root = ReadObject(UserSettingsFilePath) ?? new JsonObject();
+        ApplyConcurrentDownloads(root, count);
+        WriteObjectAtomically(UserSettingsFilePath, root, writeIndented: true);
+    }
+
+    internal static void ApplyConcurrentDownloads(JsonObject root, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 2);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, 20);
+        if (root["download"] is not JsonObject download)
+        {
+            download = new JsonObject();
+            root["download"] = download;
+        }
+        download["maxConcurrentDownloads"] = count;
+    }
+
     private static JsonObject? ReadObject(string path)
     {
         if (!File.Exists(path))

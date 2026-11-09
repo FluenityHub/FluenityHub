@@ -119,7 +119,7 @@
                     </controls:SettingsCard>
 
                     <controls:SettingsCard
-                        Description="Reduces FluenityHub's process priority to Below Normal while Unity Editor is running to save system resources"
+                        Description="Lowers background CPU, disk, and memory priority while Unity Editor runs. Releases hidden project-list controls and pauses UI polling in the system tray."
                         Header="Lower resource usage when Unity Editor opens"
                         HeaderIcon="{ui:FontIcon Glyph=&#xE9F5;}">
                         <ToggleSwitch
@@ -141,7 +141,12 @@
                             Toggled="OnExplorerContextMenuToggled" />
                     </controls:SettingsCard>
 
-                    <!-- Unity environment -->
+                    <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="Notifications" />
+                    <controls:SettingsCard Header="Dismissed warnings"
+                        Description="Show project and template warnings you previously dismissed"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE7BA;}">
+                        <Button x:Name="RestoreWarningsButton" Content="Restore warnings" Click="OnRestoreWarningsClick" />
+                    </controls:SettingsCard>
                     <TextBlock
                         Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                         Text="Unity environment" />
@@ -189,6 +194,15 @@
                         Header="Locations &amp; search paths"
                         HeaderIcon="{ui:FontIcon Glyph=&#xE773;}"
                         IsClickEnabled="True" />
+
+                    <controls:SettingsCard Header="Concurrent downloads"
+                        Description="Set the number of parallel downloads in Unity Hub. Unity CLI manages its own download queue."
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE896;}">
+                        <NumberBox x:Name="ConcurrentDownloadsNumberBox" Width="160"
+                            AutomationProperties.Name="Concurrent downloads"
+                            Minimum="2" Maximum="20" SmallChange="1" LargeChange="2"
+                            SpinButtonPlacementMode="Inline" ValueChanged="OnConcurrentDownloadsChanged" />
+                    </controls:SettingsCard>
 
                     <controls:SettingsCard
                         Header="Unity command-line tools"
@@ -625,7 +639,7 @@
                             <Button
                                 x:Name="SettingsInstallUpdateBtn"
                                 Click="OnSettingsInstallUpdateClick"
-                                Content="Update now"
+                                Content="Download update"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Visibility="Collapsed" />
                         </InfoBar.ActionButton>
@@ -654,7 +668,7 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             IsTextSelectionEnabled="True"
                             Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="1.1.0" />
+                            Text="1.2.0" />
 
                         <controls:SettingsExpander.Items>
                             <controls:SettingsCard
@@ -677,18 +691,33 @@
                                 Header="Unity Learn"
                                 IsClickEnabled="True" />
 
-                            <controls:SettingsCard ContentAlignment="Left" HorizontalContentAlignment="Left">
-                                <StackPanel Spacing="8">
-                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Components &amp; references" />
-                                    <TextBlock x:Name="ComponentVersionsTextBlock" Loaded="OnComponentVersionsLoaded" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                                    <Button Content="Third-party notices" Click="OnThirdPartyNoticesClick" AutomationProperties.Name="Read third-party software notices" />
-                                    <StackPanel Spacing="2">
-                                        <HyperlinkButton Click="OnOpenDocsClick" Content="Windows App SDK 2.4" />
-                                        <HyperlinkButton Click="OnOpenDocsClick" Content="WinUI 3" />
-                                         <HyperlinkButton Click="OnOpenCommunityToolkitClick" Content="Windows Community Toolkit" />
-                                        <HyperlinkButton Click="OnOpenDocsClick" Content=".NET 10" />
-                                        <HyperlinkButton Click="OnOpenDocsClick" Content="System.Drawing.Common" />
-                                    </StackPanel>
+                            <controls:SettingsCard
+                                Header="Third-party notices"
+                                ContentAlignment="Vertical"
+                                HorizontalContentAlignment="Left">
+                                <StackPanel>
+                                    <HyperlinkButton Content=".NET (Microsoft)"
+                                        NavigateUri="https://github.com/dotnet/runtime/blob/main/LICENSE.TXT" />
+                                    <HyperlinkButton Content="Windows App SDK (Microsoft)"
+                                        NavigateUri="https://github.com/microsoft/WindowsAppSDK/blob/main/LICENSE" />
+                                    <HyperlinkButton Content="WinUI (Microsoft)"
+                                        NavigateUri="https://github.com/microsoft/microsoft-ui-xaml/blob/main/LICENSE" />
+                                    <HyperlinkButton Content="Windows Community Toolkit (Microsoft and .NET Foundation)"
+                                        NavigateUri="https://github.com/CommunityToolkit/Windows/blob/main/License.md" />
+                                    <HyperlinkButton Content="WinUIEx (Morten Nielsen)"
+                                        NavigateUri="https://github.com/dotMorten/WinUIEx/blob/main/LICENSE" />
+                                    <HyperlinkButton Content="CsWin32 (Microsoft)"
+                                        NavigateUri="https://github.com/microsoft/CsWin32/blob/main/LICENSE" />
+                                    <HyperlinkButton Content="Microsoft.Data.Sqlite (Microsoft)"
+                                        NavigateUri="https://github.com/dotnet/efcore/blob/main/LICENSE.txt" />
+                                    <HyperlinkButton Content="SQLitePCLRaw (Eric Sink)"
+                                        NavigateUri="https://github.com/ericsink/SQLitePCL.raw/blob/main/LICENSE.TXT" />
+                                    <HyperlinkButton Content="SQLite (Richard Hipp and contributors)"
+                                        NavigateUri="https://sqlite.org/copyright.html" />
+                                    <HyperlinkButton Content="Unity CLI (Unity Technologies)"
+                                        NavigateUri="https://docs.unity.com/en-us/unity-cli/use-unity-cli" />
+                                    <HyperlinkButton Content="Git Credential Manager (GitHub, Inc. and contributors)"
+                                        NavigateUri="https://github.com/git-ecosystem/git-credential-manager/blob/main/LICENSE" />
                                 </StackPanel>
                             </controls:SettingsCard>
 

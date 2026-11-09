@@ -490,12 +490,12 @@
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
 
-                                    <MenuFlyoutItem Click="OnVerifyIntegrityClick" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
+                                    <MenuFlyoutItem Click="OnVerifyIntegrityClick" IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE90F;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
-                                    <MenuFlyoutItem Click="OnResetSandboxClick" Text="Reset Sandbox workspace" Tag="{x:Bind Editor, Mode=OneTime}">
+                                    <MenuFlyoutItem Click="OnResetSandboxClick" IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}" Text="Reset Sandbox workspace" Tag="{x:Bind Editor, Mode=OneTime}">
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE777;" />
                                         </MenuFlyoutItem.Icon>
@@ -507,6 +507,9 @@
                                         <MenuFlyoutItem.Icon>
                                             <FontIcon Glyph="&#xE8B7;" />
                                         </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Click="OnCopyEditorPathClick" Text="Copy path" Tag="{x:Bind Editor, Mode=OneTime}">
+                                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
                                     <MenuFlyoutItem Click="OnContextReleaseNotesClick" Text="View release notes" Tag="{x:Bind Editor, Mode=OneTime}">
                                         <MenuFlyoutItem.Icon>
@@ -611,6 +614,7 @@
                                         IsTextSelectionEnabled="True"
                                         Style="{StaticResource CaptionTextBlockStyle}"
                                         Text="{x:Bind Editor.InstallDirectory, Mode=OneTime}"
+                                        ToolTipService.ToolTip="{x:Bind Editor.InstallDirectory, Mode=OneTime}"
                                         TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </controls:SettingsCard.Header>
@@ -690,12 +694,12 @@
                                                 </MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
 
-                                            <MenuFlyoutItem Click="OnVerifyIntegrityClick" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
+                                            <MenuFlyoutItem Click="OnVerifyIntegrityClick" IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}" Text="Verify &amp; repair installation..." Tag="{x:Bind Editor, Mode=OneTime}">
                                                 <MenuFlyoutItem.Icon>
                                                     <FontIcon Glyph="&#xE90F;" />
                                                 </MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
-                                            <MenuFlyoutItem Click="OnResetSandboxClick" Text="Reset Sandbox workspace" Tag="{x:Bind Editor, Mode=OneTime}">
+                                            <MenuFlyoutItem Click="OnResetSandboxClick" IsEnabled="{x:Bind CanUseEditor, Mode=OneTime}" Text="Reset Sandbox workspace" Tag="{x:Bind Editor, Mode=OneTime}">
                                                 <MenuFlyoutItem.Icon>
                                                     <FontIcon Glyph="&#xE777;" />
                                                 </MenuFlyoutItem.Icon>
@@ -707,6 +711,9 @@
                                                 <MenuFlyoutItem.Icon>
                                                     <FontIcon Glyph="&#xE8B7;" />
                                                 </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Click="OnCopyEditorPathClick" Text="Copy path" Tag="{x:Bind Editor, Mode=OneTime}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
                                             <MenuFlyoutItem Click="OnViewReleaseNotesClick" Text="View release notes" Tag="{x:Bind Editor.Version, Mode=OneTime}">
                                                 <MenuFlyoutItem.Icon>

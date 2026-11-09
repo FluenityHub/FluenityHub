@@ -9,12 +9,79 @@ public sealed class UnityCliAuthService
 {
     private static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan LoginTimeout = TimeSpan.FromMinutes(10);
+    private static readonly SemaphoreSlim SessionGate = new(1, 1);
     private readonly UnityCliToolService _toolService = new();
 
-    public Task<UnityCliAuthState> GetStatusAsync(CancellationToken cancellationToken = default)
-        => RunAuthCommandAsync("status", StatusTimeout, cancellationToken);
+    internal async Task<(string AccessToken, string AccountKey)?> GetProjectShareCredentialsAsync(CancellationToken cancellationToken)
+    {
+        await SessionGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (UnityAccountConnectionState.IsDisconnected || !NetworkConnectivityService.Current.CanAttemptInternet)
+                return null;
+
+            var token = await UnityCliCommandService.RunAsync(["auth", "token"], cancellationToken, StatusTimeout);
+            if (!token.Succeeded || ReadProjectShareToken(token.Data) is not { } accessToken) return null;
+            var status = await UnityCliCommandService.RunAsync(["auth", "status"], cancellationToken, StatusTimeout);
+            if (!status.Succeeded || !ReadBoolean(status.Data, "loggedIn") || ReadString(status.Data, "mode") != "oauth"
+                || !status.Data.TryGetProperty("account", out var account) || ReadString(account, "foreignKey") is not { Length: > 0 and <= 512 } key
+                || UnityAccountConnectionState.IsDisconnected)
+                return null;
+            return (accessToken, key);
+        }
+        finally { SessionGate.Release(); }
+    }
+
+    internal static string? ReadProjectShareToken(JsonElement data)
+        => ReadString(data, "authMode") == "oauth"
+            && ReadString(data, "accessToken") is { Length: > 0 and <= 32768 } token
+            && !token.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) ? token : null;
+
+    public async Task<UnityCliAuthState> GetStatusAsync(CancellationToken cancellationToken = default)
+    {
+        await SessionGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (UnityAccountConnectionState.IsDisconnected)
+            {
+                return new(_toolService.GetStatus().IsInstalled, false, string.Empty, string.Empty, string.Empty, "Not signed in")
+                {
+                    SessionState = "none"
+                };
+            }
+
+            var executablePath = await _toolService.GetVerifiedExecutablePathAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(executablePath)) return CliUnavailableState();
+            var state = await RunAuthCommandAsync("status", StatusTimeout, cancellationToken, executablePath);
+            if (!state.RequiresReauthentication || !NetworkConnectivityService.Current.CanAttemptInternet)
+            {
+                return state;
+            }
+
+            // Status can report an expired access token while the saved session
+            // is still renewable. Let Unity refresh it without opening a browser.
+            return await RefreshSessionAsync(executablePath, cancellationToken);
+        }
+        finally
+        {
+            SessionGate.Release();
+        }
+    }
 
     public async Task<UnityCliAuthState> LoginAsync(CancellationToken cancellationToken = default)
+    {
+        await SessionGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await LoginCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            SessionGate.Release();
+        }
+    }
+
+    private async Task<UnityCliAuthState> LoginCoreAsync(CancellationToken cancellationToken)
     {
         var executablePath = await _toolService.GetVerifiedExecutablePathAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(executablePath))
@@ -104,6 +171,19 @@ public sealed class UnityCliAuthService
 
     public async Task<UnityCliAuthState> LogoutAsync(CancellationToken cancellationToken = default)
     {
+        await SessionGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await LogoutCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            SessionGate.Release();
+        }
+    }
+
+    private async Task<UnityCliAuthState> LogoutCoreAsync(CancellationToken cancellationToken)
+    {
         UnitySharedAuthService.CancelPendingOAuthRefreshes();
 
         var executablePath = await _toolService.GetVerifiedExecutablePathAsync(cancellationToken);
@@ -139,6 +219,58 @@ public sealed class UnityCliAuthService
     }
 
 
+    private async Task<UnityCliAuthState> RefreshSessionAsync(
+        string executablePath,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo(executablePath)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        UnityCliPrivacy.Apply(startInfo);
+        foreach (var argument in new[] { "--format", "json", "--non-interactive", "--no-log-proxy", "auth", "token" })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = new Process { StartInfo = startInfo };
+        // Drain and discard the token. Unity owns its storage and Editor handoff.
+        process.OutputDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, _) => { };
+        if (!process.Start()) return SessionRefreshUnavailableState();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(StatusTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+            TryCancelOutputRead(process);
+            return process.ExitCode is 0 or 3
+                ? await RunAuthCommandAsync("status", StatusTimeout, cancellationToken, executablePath)
+                : SessionRefreshUnavailableState();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryTerminate(process);
+            TryCancelOutputRead(process);
+            return SessionRefreshUnavailableState();
+        }
+        catch
+        {
+            TryTerminate(process);
+            TryCancelOutputRead(process);
+            throw;
+        }
+    }
+
+    private static UnityCliAuthState SessionRefreshUnavailableState()
+        => new(true, false, string.Empty, string.Empty, string.Empty,
+            "Your Unity session could not be refreshed. Check your connection and try again.") { SessionState = "unavailable" };
+
     private async Task<UnityCliAuthState> RunAuthCommandAsync(
         string command,
         TimeSpan timeoutDuration,
@@ -160,10 +292,11 @@ public sealed class UnityCliAuthService
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        startInfo.Environment["UNITY_NO_CLI_INVOKED_TELEMETRY"] = "1";
+        UnityCliPrivacy.Apply(startInfo);
         startInfo.ArgumentList.Add("--format");
         startInfo.ArgumentList.Add("json");
         startInfo.ArgumentList.Add("--no-log-proxy");
+        if (command != "login") startInfo.ArgumentList.Add("--non-interactive");
         startInfo.ArgumentList.Add("auth");
         startInfo.ArgumentList.Add(command);
         if (command == "logout") startInfo.ArgumentList.Add("--yes");
@@ -303,6 +436,21 @@ public sealed class UnityCliAuthService
             if (root.ValueKind != JsonValueKind.Object) return false;
             if (exitCode != 0 || (root.TryGetProperty("success", out var commandSuccess) && commandSuccess.ValueKind == JsonValueKind.False))
             {
+                if (command == "status" && exitCode == 3
+                    && root.TryGetProperty("errors", out var authErrors) && authErrors.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var authError in authErrors.EnumerateArray())
+                    {
+                        var code = ReadString(authError, "code");
+                        if (code is not ("NOT_SIGNED_IN" or "SESSION_EXPIRED")) continue;
+                        state = new(true, false, string.Empty, string.Empty, string.Empty,
+                            code == "SESSION_EXPIRED" ? "Unity sign-in expired. Sign in again to continue." : "Not signed in")
+                        {
+                            SessionState = code == "SESSION_EXPIRED" ? "expired" : "none"
+                        };
+                        return true;
+                    }
+                }
                 state = new(true, false, string.Empty, string.Empty, string.Empty,
                     ReadSafeError(root) ?? "Unity account status is temporarily unavailable.") { SessionState = "unavailable" };
                 return true;

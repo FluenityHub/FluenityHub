@@ -20,7 +20,7 @@
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <EnableWinAppRunSupport>true</EnableWinAppRunSupport>
     <AssemblyName>FluenityHub</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Win32Icon>Assets\AppIcon.ico</Win32Icon>
     <Title>FluenityHub</Title>
@@ -51,6 +51,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.14" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageReference Include="WinUIEx" Version="2.9.3" />
   </ItemGroup>
 

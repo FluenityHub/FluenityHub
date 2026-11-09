@@ -13,6 +13,7 @@ public sealed class AppSettings
     public bool AutoResetSandboxOnClose { get; set; } = false;
     public bool LaunchEditorInOfflineMode { get; set; } = false;
     public bool HideAccountAvatar { get; set; } = false;
+    public List<string> DismissedWarnings { get; set; } = [];
     public List<string> CustomFavoritePaths { get; set; } = [];
     public List<string> CustomEditorPaths { get; set; } = [];
     public List<string> CustomTemplatePaths { get; set; } = [];

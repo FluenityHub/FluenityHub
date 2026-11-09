@@ -12,6 +12,27 @@ public sealed class UnityLicensingService
 
     public bool IsClientAvailable => new UnityCliToolService().GetStatus().IsInstalled || FindLicensingClient() is not null;
 
+    internal static async Task<string> GetFloatingServerStatusAsync(CancellationToken cancellationToken)
+    {
+        var result = await UnityCliCommandService.RunAsync(["license", "server", "status"], cancellationToken, CommandTimeout);
+        return DescribeFloatingServerStatus(result);
+    }
+
+    internal static string DescribeFloatingServerStatus(UnityCliCommandResult result)
+    {
+        var data = result.Data;
+        if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("configured", out var configured))
+        {
+            if (configured.ValueKind == JsonValueKind.False) return "No floating license server is configured.";
+            if (configured.ValueKind == JsonValueKind.True && data.TryGetProperty("reachable", out var reachable))
+            {
+                if (reachable.ValueKind == JsonValueKind.False) return "The floating license server could not be reached.";
+                if (reachable.ValueKind == JsonValueKind.True && result.Succeeded) return "The floating license server is reachable.";
+            }
+        }
+        return "The floating license server status is unavailable. Check Unity CLI and your server configuration.";
+    }
+
     public async Task<(bool Succeeded, string Message)> ActivateUlfAsync(
         string? serial,
         CancellationToken cancellationToken = default)

@@ -62,6 +62,8 @@ public sealed class UnityCliLaunchService
         string? cliPath)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("$env:UNITY_NO_CLI_INVOKED_TELEMETRY = '1';");
+        sb.AppendLine("$env:UNITY_NO_CRASH_REPORT = '1';");
         var escapedCliDir = cliDirectory.Replace("'", "''");
         var escapedWorkDir = workingDirectory.Replace("'", "''");
         var escapedCliVer = (cliVersion ?? "1.0.0").Replace("'", "''");
@@ -143,7 +145,7 @@ public sealed class UnityCliLaunchService
             var cmdInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/k \"set PATH={cliDirectory};{editorDirectory};%PATH% && echo Unity CLI Environment Ready. Type 'unity --help' for commands.\"",
+                Arguments = $"/k \"set UNITY_NO_CLI_INVOKED_TELEMETRY=1&& set UNITY_NO_CRASH_REPORT=1&& set PATH={cliDirectory};{editorDirectory};%PATH% && echo Unity CLI Environment Ready. Type 'unity --help' for commands.\"",
                 WorkingDirectory = workingDirectory,
                 UseShellExecute = true
             };

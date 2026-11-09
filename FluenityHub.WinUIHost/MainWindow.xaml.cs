@@ -32,6 +32,11 @@ public sealed partial class MainWindow : Window
     private NativeTrayIcon? _trayIcon;
     private bool _isExitingFromTray;
     private readonly DispatcherTimer _priorityMonitorTimer = new();
+    private readonly EditorResourceUsageService _editorResourceUsage = new();
+    private bool _lowerResourcesWhenUnityOpens;
+    private bool _isHiddenToTray;
+    private bool _isSavingResources;
+    private int _activeTrayEditorLaunches;
     private readonly DispatcherTimer _taskbarErrorClearTimer = new();
     private readonly UnityCliAuthService _unityCliAuthService = new();
     private readonly UnityLogoutSecurityService _unityLogoutSecurityService = new();
@@ -252,12 +257,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnInstallUpdateRequested(object? sender, EventArgs e)
+    private async void OnInstallUpdateRequested(object? sender, EventArgs e)
     {
-        var targetUrl = _currentUpdateInfo?.DownloadUrl
-            ?? _currentUpdateInfo?.ReleaseUrl
-            ?? "https://github.com/FluenityHub/FluenityHub/releases";
-        OpenExternalUrl(targetUrl);
+        if (MainPage.Instance is { } page && _currentUpdateInfo is { } update)
+            await Dialogs.AppUpdateDialog.ShowAsync(page, update);
     }
 
     private void OnSeeChangesRequested(object? sender, EventArgs e)
@@ -570,6 +573,8 @@ public sealed partial class MainWindow : Window
 
     private async void LaunchProjectFromTray(UnityProjectInfo project)
     {
+        _activeTrayEditorLaunches++;
+        UpdateResourceUsage(EditorResourceUsageService.IsAnyEditorRunning());
         try
         {
             var settingsStore = new AppSettingsStore();
@@ -608,6 +613,11 @@ public sealed partial class MainWindow : Window
         catch
         {
             RestoreWindow();
+        }
+        finally
+        {
+            _activeTrayEditorLaunches--;
+            UpdateResourceUsage(EditorResourceUsageService.IsAnyEditorRunning());
         }
     }
 
@@ -700,6 +710,8 @@ public sealed partial class MainWindow : Window
         object? sender,
         UnityModuleInstallationChangedEventArgs args)
     {
+        if (_isSavingResources && _moduleInstallationManager.HasActiveOperations)
+            UpdateResourceUsage(editorRunning: true);
         if (args.ChangedOperation?.IsTerminal == true)
         {
             ShowModuleInstallationNotification(args.ChangedOperation);
@@ -1027,14 +1039,15 @@ public sealed partial class MainWindow : Window
 
     private void OnPriorityMonitorTimerTick(object? sender, object e)
     {
-        EvaluateProcessPriority();
+        var editorRunning = EditorResourceUsageService.IsAnyEditorRunning();
+        UpdateResourceUsage(editorRunning);
 
         if (!_restoreAfterUnityExit)
         {
             return;
         }
 
-        if (IsAnyUnityEditorRunning())
+        if (editorRunning)
         {
             _launchedUnityWasObserved = true;
             return;
@@ -1081,8 +1094,9 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     _launchedUnityWasObserved = true;
-                    if (!IsAnyUnityEditorRunning())
+                    if (!EditorResourceUsageService.IsAnyEditorRunning())
                     {
+                        UpdateResourceUsage(editorRunning: false);
                         RestoreAfterUnityExit();
                     }
                 });
@@ -1118,32 +1132,6 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private static bool IsAnyUnityEditorRunning()
-    {
-        var processes = System.Diagnostics.Process.GetProcessesByName("Unity");
-        try
-        {
-            return processes.Any(process =>
-            {
-                try
-                {
-                    return !process.HasExited;
-                }
-                catch
-                {
-                    return false;
-                }
-            });
-        }
-        finally
-        {
-            foreach (var process in processes)
-            {
-                process.Dispose();
-            }
-        }
-    }
-
     private void RestoreAfterUnityExit()
     {
         if (!_restoreAfterUnityExit)
@@ -1160,41 +1148,47 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var settings = new AppSettingsStore().Load();
-            if (settings.LowerPriorityWhenUnityOpens)
-            {
-                var unityProcesses = System.Diagnostics.Process.GetProcessesByName("Unity");
-                bool isUnityRunning;
-                try
-                {
-                    isUnityRunning = unityProcesses.Length > 0;
-                }
-                finally
-                {
-                    foreach (var process in unityProcesses) process.Dispose();
-                }
-                using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-                var currentPriority = currentProcess.PriorityClass;
-                var targetPriority = isUnityRunning ? System.Diagnostics.ProcessPriorityClass.BelowNormal : System.Diagnostics.ProcessPriorityClass.Normal;
-
-                if (currentPriority != targetPriority)
-                {
-                    currentProcess.PriorityClass = targetPriority;
-                }
-            }
-            else
-            {
-                using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-                if (currentProcess.PriorityClass != System.Diagnostics.ProcessPriorityClass.Normal)
-                {
-                    currentProcess.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
-                }
-            }
+            _lowerResourcesWhenUnityOpens = new AppSettingsStore().Load().LowerPriorityWhenUnityOpens;
+            UpdateResourceUsage(EditorResourceUsageService.IsAnyEditorRunning());
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            // Ignore process priority elevation/permission issues
+            System.Diagnostics.Trace.TraceWarning($"Resource settings could not be read: {ex.GetType().Name}");
         }
+    }
+
+    private void UpdateResourceUsage(bool editorRunning)
+    {
+        var saveResources = _lowerResourcesWhenUnityOpens && editorRunning && _isHiddenToTray
+            && !_moduleInstallationManager.HasActiveOperations && _activeEditorUninstallCount == 0
+            && !_isUnityAccountBusy && _activeTrayEditorLaunches == 0
+            && AppRootGrid.XamlRoot is { } root
+            && !Microsoft.UI.Xaml.Media.VisualTreeHelper.GetOpenPopupsForXamlRoot(root)
+                .Any(popup => popup.IsOpen && popup.Child is { } child && ContainsContentDialog(child));
+        try
+        {
+            _editorResourceUsage.Apply(editorRunning, _lowerResourcesWhenUnityOpens, saveResources);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            System.Diagnostics.Trace.TraceWarning($"Resource policy could not be applied: {ex.Message}");
+        }
+        if (_isSavingResources != saveResources)
+        {
+            _isSavingResources = saveResources;
+            if (RootFrame.Content is MainPage mainPage) mainPage.SetResourceSaving(saveResources);
+        }
+        _priorityMonitorTimer.Interval = TimeSpan.FromSeconds(saveResources ? 15 : 3);
+    }
+
+    private static bool ContainsContentDialog(DependencyObject element)
+    {
+        if (element is ContentDialog) return true;
+        for (var index = 0; index < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(element); index++)
+        {
+            if (ContainsContentDialog(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(element, index))) return true;
+        }
+        return false;
     }
 
     public void MinimizeToTray()
@@ -1207,6 +1201,8 @@ public sealed partial class MainWindow : Window
 
         // 2. Hide the window
         AppWindow.Hide();
+        _isHiddenToTray = true;
+        UpdateResourceUsage(EditorResourceUsageService.IsAnyEditorRunning());
 
         // 3. Show a Windows App SDK toast notification
         try
@@ -1229,6 +1225,8 @@ public sealed partial class MainWindow : Window
 
     public void RestoreWindow()
     {
+        _isHiddenToTray = false;
+        UpdateResourceUsage(EditorResourceUsageService.IsAnyEditorRunning());
         // If the user restores the app manually, do not raise it again when
         // the Editor exits later.
         _restoreAfterUnityExit = false;

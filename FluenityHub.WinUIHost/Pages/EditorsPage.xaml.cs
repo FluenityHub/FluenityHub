@@ -8,6 +8,7 @@ using FluenityHub_WinUIHost.Models;
 using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace FluenityHub_WinUIHost.Pages;
 
@@ -75,8 +76,6 @@ public sealed partial class EditorsPage : Page
     private readonly UnityModuleInstallationManager _moduleInstallationManager =
         UnityModuleInstallationManager.Instance;
     private readonly List<UnityEditorInfo> _allEditors = [];
-    private readonly HashSet<string> _uninstallingEditorVersions =
-        new(StringComparer.OrdinalIgnoreCase);
     public ObservableCollection<UnityModuleInstallationListItem> ModuleOperations { get; } = [];
     public ObservableCollection<UnityExternalActivityInfo> ExternalActivities { get; } = [];
     private AppSettings _settings = new();
@@ -85,6 +84,7 @@ public sealed partial class EditorsPage : Page
     private readonly DispatcherTimer _externalRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private string? _externalFingerprint;
     private bool _externalRefreshBusy;
+    private bool _isResourceSaving;
     private bool _externalActivityWarningShown;
     private string? _defaultEditorVersion;
     private readonly Dictionary<string, string> _releaseStreams = new(StringComparer.OrdinalIgnoreCase);
@@ -106,6 +106,7 @@ public sealed partial class EditorsPage : Page
         _externalRefreshCancellation = new CancellationTokenSource();
         _externalRefreshTimer.Start();
         _moduleInstallationManager.OperationChanged += OnModuleInstallationChanged;
+        UnityEditorUninstallTracker.Changed += OnEditorUninstallChanged;
         SyncModuleOperations();
         if (!_hasLoadedEditors)
         {
@@ -131,11 +132,27 @@ public sealed partial class EditorsPage : Page
         _externalRefreshCancellation = null;
         _releaseLookupTask = null;
         _moduleInstallationManager.OperationChanged -= OnModuleInstallationChanged;
+        UnityEditorUninstallTracker.Changed -= OnEditorUninstallChanged;
+    }
+
+    private void OnEditorUninstallChanged(object? sender, UnityEditorUninstallChangedEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (!IsLoaded) return;
+            if (e.IsUninstalling)
+            {
+                ApplyFilterAndSort();
+                return;
+            }
+            if (_editorReloadTask is { IsCompleted: false } reloadTask) await reloadTask;
+            if (IsLoaded) await ReloadEditorsAsync();
+        });
     }
 
     private async void OnExternalRefreshTick(object? sender, object e)
     {
-        if (_externalRefreshBusy || _editorReloadTask is { IsCompleted: false }
+        if (_isResourceSaving || _externalRefreshBusy || _editorReloadTask is { IsCompleted: false }
             || _externalRefreshCancellation is null) return;
         _externalRefreshBusy = true;
         var cancellation = _externalRefreshCancellation.Token;
@@ -175,6 +192,17 @@ public sealed partial class EditorsPage : Page
             ShowStatus("Installed Editors could not be refreshed", ex.Message, InfoBarSeverity.Warning);
         }
         finally { _externalRefreshBusy = false; }
+    }
+
+    public void SetResourceSaving(bool enabled)
+    {
+        _isResourceSaving = enabled;
+        if (enabled) _externalRefreshTimer.Stop();
+        else if (_externalRefreshCancellation is not null)
+        {
+            _externalRefreshTimer.Start();
+            OnExternalRefreshTick(this, EventArgs.Empty);
+        }
     }
 
     private Task ReloadEditorsAsync()
@@ -336,8 +364,8 @@ public sealed partial class EditorsPage : Page
             {
                 Editor = editor,
                 CanUseEditor = !busyEditorVersions.Contains(editor.Version)
-                    && !_uninstallingEditorVersions.Contains(editor.Version),
-                IsUninstalling = _uninstallingEditorVersions.Contains(editor.Version),
+                    && !UnityEditorUninstallTracker.IsUninstalling(editor.Version),
+                IsUninstalling = UnityEditorUninstallTracker.IsUninstalling(editor.Version),
                 IsDefault = string.Equals(editor.Version, _defaultEditorVersion, StringComparison.OrdinalIgnoreCase),
                 ReleaseStream = _releaseStreams.GetValueOrDefault(editor.Version, string.Empty),
                 ProjectCount = allProjects.Count(p => string.Equals(p.Version, editor.Version, StringComparison.OrdinalIgnoreCase))
@@ -468,7 +496,8 @@ public sealed partial class EditorsPage : Page
     {
         if (sender is FrameworkElement { Tag: UnityEditorInfo editor })
         {
-            if (_moduleInstallationManager.IsEditorBusy(editor.Version))
+            if (_moduleInstallationManager.IsEditorBusy(editor.Version)
+                || UnityEditorUninstallTracker.IsUninstalling(editor.Version))
             {
                 ShowStatus(
                     $"Unity {editor.Version} is being updated. You can launch another editor version while it finishes.",
@@ -560,7 +589,8 @@ public sealed partial class EditorsPage : Page
             return;
         }
 
-        if (_moduleInstallationManager.IsEditorBusy(editor.Version))
+        if (_moduleInstallationManager.IsEditorBusy(editor.Version)
+            || UnityEditorUninstallTracker.IsUninstalling(editor.Version))
         {
             ShowStatus(
                 $"Modules are already queued or installing for Unity {editor.Version}.",
@@ -759,7 +789,7 @@ public sealed partial class EditorsPage : Page
         }
 
         if (_moduleInstallationManager.IsEditorBusy(editor.Version)
-            || _uninstallingEditorVersions.Contains(editor.Version))
+            || UnityEditorUninstallTracker.IsUninstalling(editor.Version))
         {
             ShowStatus(
                 $"{editor.DisplayName} is currently being updated and cannot be uninstalled.",
@@ -799,24 +829,20 @@ public sealed partial class EditorsPage : Page
             return;
         }
 
-        _uninstallingEditorVersions.Add(editor.Version);
-        ApplyFilterAndSort();
-        MainWindow.Instance?.NotifyEditorUninstallStarted();
-        ShowStatus(
-            "Uninstalling Unity Editor",
-            $"Removing {editor.DisplayName}…",
-            InfoBarSeverity.Success);
+        if (!UnityEditorUninstallTracker.TryBegin(editor.Version)) return;
         var succeeded = false;
         var completionMessage = $"Unable to uninstall {editor.DisplayName}.";
         try
         {
+            MainWindow.Instance?.NotifyEditorUninstallStarted();
+            ShowStatus("Uninstalling Unity Editor", $"Removing {editor.DisplayName}…", InfoBarSeverity.Informational);
             var result = await _editorInstallationService.UninstallAsync(
                 editor.Version,
                 outputObserver: null,
                 CancellationToken.None);
             succeeded = result.Succeeded;
             completionMessage = result.Message;
-            ShowStatus(
+            if (IsLoaded) ShowStatus(
                 result.Succeeded ? "Unity Editor uninstalled" : "Uninstall failed",
                 result.Message,
                 result.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
@@ -824,17 +850,24 @@ public sealed partial class EditorsPage : Page
         catch (Exception ex)
         {
             completionMessage = ex.Message;
-            ShowStatus("Uninstall failed", ex.Message, InfoBarSeverity.Error);
+            if (IsLoaded) ShowStatus("Uninstall failed", ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
+            UnityEditorUninstallTracker.Complete(editor.Version);
             MainWindow.Instance?.NotifyEditorUninstallCompleted(
                 editor.DisplayName,
                 succeeded,
                 completionMessage);
-            _uninstallingEditorVersions.Remove(editor.Version);
-            await ReloadEditorsAsync();
         }
+    }
+
+    private void OnCopyEditorPathClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: UnityEditorInfo editor }) return;
+        var content = new DataPackage();
+        content.SetText(editor.InstallDirectory);
+        Clipboard.SetContent(content);
     }
 
     private static bool IsEditorRunning(string executablePath)
@@ -1280,6 +1313,11 @@ public sealed partial class EditorsPage : Page
 
     private async Task LaunchEditorAsync(UnityEditorInfo editor)
     {
+        if (UnityEditorUninstallTracker.IsUninstalling(editor.Version))
+        {
+            ShowStatus($"Unity {editor.Version} is being uninstalled.", InfoBarSeverity.Warning);
+            return;
+        }
         try
         {
             var xamlRoot = await XamlRootResolver.ResolveAsync(this);

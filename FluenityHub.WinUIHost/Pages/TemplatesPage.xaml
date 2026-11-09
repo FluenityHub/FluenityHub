@@ -43,11 +43,16 @@
         </Grid.RowDefinitions>
 
         <!-- Page Header Title -->
-        <TextBlock
-            Grid.Row="0"
-            Margin="0,0,0,16"
-            Style="{StaticResource TitleTextBlockStyle}"
-            Text="Templates" />
+        <StackPanel Grid.Row="0">
+            <TextBlock Margin="0,0,0,16" Style="{StaticResource TitleTextBlockStyle}" Text="Templates" />
+            <InfoBar x:Name="WarningUndoInfoBar" Margin="0,0,0,12" IsClosable="True" IsOpen="False"
+                Visibility="{x:Bind WarningUndoInfoBar.IsOpen, Mode=OneWay}"
+                Message="Editor warning dismissed.">
+                <InfoBar.ActionButton>
+                    <Button Content="Undo" Click="OnUndoWarningClick" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
 
         <!-- Command & Search Header Bar -->
         <Grid Grid.Row="1" Margin="0,0,0,16">
@@ -238,6 +243,15 @@
                                             <FontIcon Glyph="&#xE896;" />
                                         </MenuFlyoutItem.Icon>
                                     </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnEditorWarningClick"
+                                        Tag="{x:Bind}"
+                                        Text="{x:Bind EditorWarningActionText, Mode=OneWay}"
+                                        Visibility="{x:Bind IsEditorMissing}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE7BA;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
                                     <MenuFlyoutSeparator />
                                     <MenuFlyoutItem
                                         Click="OnEditTemplateClick"
@@ -387,7 +401,7 @@
                                         Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
                                         CornerRadius="{ThemeResource ControlCornerRadius}"
                                         ToolTipService.ToolTip="Unity Editor version is not installed"
-                                        Visibility="{x:Bind IsEditorMissing}">
+                                        Visibility="{x:Bind ShowMissingEditorWarning, Mode=OneWay}">
                                         <TextBlock
                                             FontSize="10"
                                             Foreground="{ThemeResource SystemFillColorCautionBrush}"
@@ -478,6 +492,15 @@
                                                         Visibility="{x:Bind IsEditorMissing}">
                                                         <MenuFlyoutItem.Icon>
                                                             <FontIcon Glyph="&#xE896;" />
+                                                        </MenuFlyoutItem.Icon>
+                                                    </MenuFlyoutItem>
+                                                    <MenuFlyoutItem
+                                                        Click="OnEditorWarningClick"
+                                                        Tag="{x:Bind}"
+                                                        Text="{x:Bind EditorWarningActionText, Mode=OneWay}"
+                                                        Visibility="{x:Bind IsEditorMissing}">
+                                                        <MenuFlyoutItem.Icon>
+                                                            <FontIcon Glyph="&#xE7BA;" />
                                                         </MenuFlyoutItem.Icon>
                                                     </MenuFlyoutItem>
                                                     <MenuFlyoutSeparator Visibility="{x:Bind IsEditorMissing}" />

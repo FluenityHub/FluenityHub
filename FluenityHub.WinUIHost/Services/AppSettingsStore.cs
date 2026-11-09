@@ -6,16 +6,21 @@ namespace FluenityHub_WinUIHost.Services;
 
 public sealed class AppSettingsStore
 {
+    private static readonly Lock SettingsGate = new();
 
     private readonly string _settingsFilePath;
 
-    public AppSettingsStore()
+    public AppSettingsStore() : this(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "FluenityHub.WinUIHost", "settings.json"))
     {
-        var appDataDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "FluenityHub.WinUIHost");
-        Directory.CreateDirectory(appDataDirectory);
-        _settingsFilePath = Path.Combine(appDataDirectory, "settings.json");
+    }
+
+    internal AppSettingsStore(string settingsFilePath)
+    {
+        _settingsFilePath = Path.GetFullPath(settingsFilePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsFilePath)
+            ?? throw new ArgumentException("A settings directory is required.", nameof(settingsFilePath)));
     }
 
     public AppSettings Load()
@@ -25,7 +30,10 @@ public sealed class AppSettingsStore
             return new AppSettings();
         }
 
-        var content = File.ReadAllText(_settingsFilePath);
+        string content;
+        using (var stream = File.Open(_settingsFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var reader = new StreamReader(stream))
+            content = reader.ReadToEnd();
         MigrateLegacyTokenFields(content);
 
         var settings = JsonSerializer.Deserialize(content, AppJsonContext.Default.AppSettings);
@@ -39,10 +47,34 @@ public sealed class AppSettingsStore
 
     public void Save(AppSettings settings, bool updateGitAccounts = false)
     {
-        if (!updateGitAccounts && File.Exists(_settingsFilePath))
-            settings.GitAccounts = Load().GitAccounts;
+        lock (SettingsGate)
+        {
+            if (File.Exists(_settingsFilePath))
+            {
+                var current = Load();
+                if (!updateGitAccounts) settings.GitAccounts = current.GitAccounts;
+                settings.DismissedWarnings = current.DismissedWarnings;
+            }
+            Write(settings);
+        }
+    }
+
+    public void UpdatePreferences(Action<AppSettings> update)
+    {
+        lock (SettingsGate)
+        {
+            var settings = Load();
+            update(settings);
+            Write(settings);
+        }
+    }
+
+    private void Write(AppSettings settings)
+    {
         var content = JsonSerializer.Serialize(settings, AppJsonContext.Default.AppSettings);
-        File.WriteAllText(_settingsFilePath, content);
+        var temporaryPath = _settingsFilePath + ".tmp";
+        File.WriteAllText(temporaryPath, content);
+        File.Move(temporaryPath, _settingsFilePath, overwrite: true);
     }
 
     private void MigrateLegacyTokenFields(string content)

@@ -47,6 +47,9 @@ public sealed partial class ProjectsPage : Page
     private bool _isSyncingFlyout;
     private bool _isReloadingData;
     private bool _hasCompletedEditorDiscovery;
+    private bool _isResourceSaving;
+    private string? _suspendedSelectionPath;
+    private double _suspendedScrollOffset;
     private ProjectListItemViewModel? _contextMenuRow;
     private DateTime _projectStoreChangeStampUtc;
     private sealed record ProjectSourceControlRefresh(
@@ -74,6 +77,49 @@ public sealed partial class ProjectsPage : Page
         Loaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = true;
         Unloaded += (_, _) => SearchKeyboardAccelerator.IsEnabled = false;
         ReloadData(showSuccessMessage: false);
+    }
+
+    public void SetResourceSaving(bool enabled)
+    {
+        if (_isResourceSaving == enabled) return;
+        _isResourceSaving = enabled;
+        if (enabled)
+        {
+            _suspendedSelectionPath = (ProjectsListView.SelectedItem as ProjectListItemViewModel)?.Project.Path;
+            var scrollViewer = FindListScrollViewer(ProjectsListView);
+            _suspendedScrollOffset = scrollViewer?.VerticalOffset ?? 0;
+            _contextMenuRow = null;
+            ProjectsListView.ItemsSource = null;
+            ProjectsCollectionViewSource.Source = null;
+            UnloadObject(ProjectsListView);
+        }
+        else
+        {
+            FindName(nameof(ProjectsListView));
+            ApplyFilterAndSort(refreshSourceControl: false);
+            if (_suspendedSelectionPath is not null && _projectRows.TryGetValue(_suspendedSelectionPath, out var row))
+                ProjectsListView.SelectedItem = row;
+            ProjectsListView.Loaded += OnProjectListResumed;
+        }
+    }
+
+    private void OnProjectListResumed(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ListView list) return;
+        list.Loaded -= OnProjectListResumed;
+        if (_isResourceSaving || !ReferenceEquals(list, ProjectsListView)) return;
+        FindListScrollViewer(list)?.ChangeView(null, _suspendedScrollOffset, null, disableAnimation: true);
+    }
+
+    private static ScrollViewer? FindListScrollViewer(DependencyObject parent)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is ScrollViewer viewer) return viewer;
+            if (FindListScrollViewer(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     private async void ReloadData(bool showSuccessMessage)
@@ -355,7 +401,7 @@ public sealed partial class ProjectsPage : Page
 
     private void ApplyFilterAndSort(bool refreshSourceControl = true)
     {
-        if (ProjectsListView is null || SearchBox is null || SummaryTextBlock is null || EmptyStatePanel is null)
+        if (_isResourceSaving || ProjectsListView is null || SearchBox is null || SummaryTextBlock is null || EmptyStatePanel is null)
         {
             return;
         }
@@ -561,7 +607,9 @@ public sealed partial class ProjectsPage : Page
                 IsSourceControlEnabled = scEnabled,
                 IsModifiedColumnVisible = showMod,
                 IsEditorVersionColumnVisible = showVer,
-                IsPlatformColumnVisible = showPlatform
+                IsPlatformColumnVisible = showPlatform,
+                IsEditorWarningDismissed = _settings.DismissedWarnings.Contains(
+                    WarningPreferences.ProjectKey(project.Path, project.Version))
             };
         }).ToList();
 
@@ -1953,8 +2001,7 @@ public sealed partial class ProjectsPage : Page
         }
         finally
         {
-            // A user-requested share can complete a browser reauthentication.
-            // Refresh the title-bar identity once that flow settles.
+            // The CLI can renew the saved session while preparing a link.
             _ = MainWindow.Instance?.RefreshUnityAccountStateAsync();
         }
     }
@@ -3104,6 +3151,45 @@ public sealed partial class ProjectsPage : Page
         digitGroup = Math.Clamp(digitGroup, 0, units.Length - 1);
         double number = bytes / Math.Pow(1024, digitGroup);
         return $"{number:0.##} {units[digitGroup]}";
+    }
+
+    private string? _dismissedWarningKey;
+
+    private void OnEditorWarningClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: ProjectListItemViewModel item }) return;
+        var key = WarningPreferences.ProjectKey(item.Path, item.Project.Version);
+        try
+        {
+            var dismissed = !item.IsEditorWarningDismissed;
+            WarningPreferences.SetDismissed(key, dismissed);
+            _settings = _settingsStore.Load();
+            item.IsEditorWarningDismissed = dismissed;
+            _dismissedWarningKey = dismissed ? key : null;
+            WarningUndoInfoBar.IsOpen = dismissed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowStatus($"The warning preference could not be saved: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private void OnUndoWarningClick(object sender, RoutedEventArgs e)
+    {
+        if (_dismissedWarningKey is not { } key) return;
+        try
+        {
+            WarningPreferences.SetDismissed(key, false);
+            _settings = _settingsStore.Load();
+            foreach (var item in _projectRows.Values)
+                if (WarningPreferences.ProjectKey(item.Path, item.Project.Version) == key) item.IsEditorWarningDismissed = false;
+            _dismissedWarningKey = null;
+            WarningUndoInfoBar.IsOpen = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowStatus($"The warning could not be restored: {ex.Message}", InfoBarSeverity.Error);
+        }
     }
 
     private async void ShowStatus(string message, InfoBarSeverity severity)

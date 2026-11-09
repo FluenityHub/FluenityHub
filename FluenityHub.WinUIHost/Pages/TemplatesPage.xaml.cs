@@ -112,6 +112,8 @@ public sealed partial class TemplatesPage : Page
     {
         foreach (var template in _allTemplates)
         {
+            template.IsEditorWarningDismissed = _settings.DismissedWarnings.Contains(
+                WarningPreferences.TemplateKey(template.Id, template.EditorVersion));
             if (string.IsNullOrWhiteSpace(template.EditorVersion))
             {
                 template.IsEditorInstalled = _installedEditors.Count > 0;
@@ -855,6 +857,45 @@ public sealed partial class TemplatesPage : Page
         {
             Debug.WriteLine($"OnInstallMissingEditorClick failed: {ex}");
             ShowStatus("Unable to open the Editor installer", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private string? _dismissedWarningKey;
+
+    private void OnEditorWarningClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: CustomTemplateInfo template }) return;
+        var key = WarningPreferences.TemplateKey(template.Id, template.EditorVersion);
+        try
+        {
+            var dismissed = !template.IsEditorWarningDismissed;
+            WarningPreferences.SetDismissed(key, dismissed);
+            template.IsEditorWarningDismissed = dismissed;
+            _settings = _settingsStore.Load();
+            _dismissedWarningKey = dismissed ? key : null;
+            WarningUndoInfoBar.IsOpen = dismissed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowStatus("The warning preference could not be saved", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private void OnUndoWarningClick(object sender, RoutedEventArgs e)
+    {
+        if (_dismissedWarningKey is not { } key) return;
+        try
+        {
+            WarningPreferences.SetDismissed(key, false);
+            _settings = _settingsStore.Load();
+            foreach (var template in _allTemplates)
+                if (WarningPreferences.TemplateKey(template.Id, template.EditorVersion) == key) template.IsEditorWarningDismissed = false;
+            _dismissedWarningKey = null;
+            WarningUndoInfoBar.IsOpen = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowStatus("The warning could not be restored", ex.Message, InfoBarSeverity.Error);
         }
     }
 

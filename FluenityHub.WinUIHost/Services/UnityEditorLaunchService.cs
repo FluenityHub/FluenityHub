@@ -212,6 +212,8 @@ public sealed class UnityEditorLaunchService
 
         var account = await _cliAuthService.GetStatusAsync(cancellationToken);
         if (!account.IsLoggedIn) return new(false, account.Message);
+        if (UnityAccountConnectionState.IsDisconnected)
+            return new(false, "Sign in from the account menu, or enable offline Editor mode in Settings > Unity licenses.");
         var arguments = new List<string> { "open", Path.GetFullPath(projectPath), "--editor-path", Path.GetFullPath(editorExecutable) };
         if (!string.IsNullOrWhiteSpace(targetPlatform))
         {

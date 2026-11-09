@@ -14,7 +14,7 @@ WinUIEx by Morten Nielsen and contributors. MIT license.
 https://github.com/dotMorten/WinUIEx/blob/main/LICENSE
 
 CsWin32 by Microsoft and contributors. MIT license.
-https://github.com/microsoft/CsWin32/blob/main/LICENSE.txt
+https://github.com/microsoft/CsWin32/blob/main/LICENSE
 
 Microsoft.Data.Sqlite by Microsoft and contributors. MIT license.
 https://github.com/dotnet/efcore/blob/main/LICENSE.txt

@@ -25,16 +25,18 @@ public sealed class UnityProjectShareLinkService
     private const int MaximumIdentifierLength = 512;
     private static readonly SemaphoreSlim CloudAuthenticationGate = new(1, 1);
 
-    private readonly HttpClient _httpClient = new()
+    private static readonly HttpClient ShareHttpClient = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         BaseAddress = ServiceRoot,
-        Timeout = TimeSpan.FromSeconds(15)
+        Timeout = TimeSpan.FromSeconds(15),
+        MaxResponseContentBufferSize = 65536
     };
 
-    private static readonly HttpClient GatewayHttpClient = new()
+    private static readonly HttpClient GatewayHttpClient = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         BaseAddress = GatewayServiceRoot,
-        Timeout = TimeSpan.FromSeconds(15)
+        Timeout = TimeSpan.FromSeconds(15),
+        MaxResponseContentBufferSize = 65536
     };
 
     public static bool CanCreate(UnityProjectInfo project)
@@ -67,6 +69,8 @@ public sealed class UnityProjectShareLinkService
         {
             return new(false, null, authError);
         }
+        if (UnityAccountConnectionState.IsDisconnected)
+            return new(false, null, "Sign in to Unity before copying a project link.");
 
         var organizationId = project.OrganizationId!;
         var cloudProjectId = project.CloudProjectId!;
@@ -94,16 +98,13 @@ public sealed class UnityProjectShareLinkService
             Content = new StringContent(requestBody, Encoding.UTF8, "application/json")
         };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.UnityTokenValue);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Add("X-Client-ID", "unity-hub");
         request.Headers.UserAgent.ParseAdd("FluenityHub/1.0");
 
         try
         {
-            using var response = await _httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+            using var response = await ShareHttpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return new(false, null, response.StatusCode switch
@@ -118,7 +119,8 @@ public sealed class UnityProjectShareLinkService
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            if (!document.RootElement.TryGetProperty("Url", out var urlElement)
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("Url", out var urlElement)
                 || urlElement.ValueKind != JsonValueKind.String
                 || !TryExtractToken(urlElement.GetString(), out var linkToken))
             {
@@ -149,15 +151,15 @@ public sealed class UnityProjectShareLinkService
 
     /// <summary>
     /// Gets a current Unity gateway token for a user-requested share action.
-    /// Unity Cloud app-linking cannot use the Editor OAuth token, so this
-    /// method never falls back to it or starts a browser sign-in implicitly.
+    /// Unity Cloud app-linking requires a gateway token. An Editor OAuth token
+    /// can be exchanged, but is never sent to the app-linking endpoint.
     /// </summary>
-    private async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
+    private async Task<(string? Token, string ErrorMessage)>
         EnsureCloudAuthenticationAsync(CancellationToken cancellationToken)
     {
         if (TryGetUsableCloudToken(out var token, out _))
         {
-            return (token, string.Empty);
+            return (token?.UnityTokenValue, string.Empty);
         }
 
         await CloudAuthenticationGate.WaitAsync(cancellationToken);
@@ -165,7 +167,7 @@ public sealed class UnityProjectShareLinkService
         {
             if (TryGetUsableCloudToken(out token, out _))
             {
-                return (token, string.Empty);
+                return (token?.UnityTokenValue, string.Empty);
             }
 
             return await ExchangeUnityGatewayTokenAsync(cancellationToken);
@@ -181,26 +183,31 @@ public sealed class UnityProjectShareLinkService
     /// session. The returned token is held only for the current link request;
     /// FluenityHub never writes it to Credential Manager or settings.
     /// </summary>
-    private async Task<(UnitySharedAccessToken? Token, string ErrorMessage)>
+    private async Task<(string? Token, string ErrorMessage)>
         ExchangeUnityGatewayTokenAsync(CancellationToken cancellationToken)
     {
-        if (!UnitySharedAuthService.TryGetActiveAccessToken(out var sharedToken, out var errorMessage)
-            || sharedToken is null)
+        string accessToken;
+        string accountKey;
+        if (UnitySharedAuthService.TryGetActiveAccessToken(out var sharedToken, out _)
+            && sharedToken is not null && UnitySharedAuthService.IsAccessTokenUsable(sharedToken))
         {
-            return (null, string.IsNullOrWhiteSpace(errorMessage)
-                ? "Unity Cloud sharing is unavailable for the current credential provider. Use Unity Hub to create this link."
-                : "Unity Cloud sharing cannot use this account credential. Use Unity Hub to create this link.");
+            accessToken = sharedToken.Value;
+            accountKey = sharedToken.Account.ForeignKey;
         }
-
-        if (!UnitySharedAuthService.IsAccessTokenUsable(sharedToken))
+        else
         {
-            return (null, "Unity sign-in expired. Sign in again and retry.");
+            var credentials = await new UnityCliAuthService().GetProjectShareCredentialsAsync(cancellationToken);
+            if (credentials is not { } cli)
+                return (null, "Unity Cloud sharing needs an active Unity account. Check your sign-in and try again.");
+            (accessToken, accountKey) = cli;
         }
+        if (UnityAccountConnectionState.IsDisconnected)
+            return (null, "Sign in to Unity before copying a project link.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/v1/genesis-token-exchange/unity")
         {
             Content = new StringContent(
-                new JsonObject { ["token"] = sharedToken.Value }
+                new JsonObject { ["token"] = accessToken }
                     .ToJsonString(AppJsonContext.Default.Options),
                 Encoding.UTF8,
                 "application/json")
@@ -210,10 +217,7 @@ public sealed class UnityProjectShareLinkService
 
         try
         {
-            using var response = await GatewayHttpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+            using var response = await GatewayHttpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return (null, response.StatusCode switch
@@ -228,25 +232,17 @@ public sealed class UnityProjectShareLinkService
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            if (!document.RootElement.TryGetProperty("token", out var tokenElement)
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("token", out var tokenElement)
                 || tokenElement.ValueKind != JsonValueKind.String
-                || string.IsNullOrWhiteSpace(tokenElement.GetString())
-                || !UnitySharedAuthService.TryValidateUnityGatewayToken(
-                    tokenElement.GetString()!,
-                    sharedToken.Account.ForeignKey,
-                    out var expiration))
+                || tokenElement.GetString() is not { Length: > 0 } gatewayToken
+                || !UnitySharedAuthService.TryValidateUnityGatewayToken(gatewayToken, accountKey, out var expiration))
             {
                 return (null, "Unity returned an invalid Cloud credential. Sign in again and retry.");
             }
 
-            var exchangedToken = new UnitySharedAccessToken(
-                sharedToken.Value,
-                sharedToken.Expiration,
-                tokenElement.GetString(),
-                expiration,
-                sharedToken.Account);
-            return UnitySharedAuthService.HasUsableUnityGatewayToken(exchangedToken)
-                ? (exchangedToken, string.Empty)
+            return expiration > DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeMilliseconds()
+                ? (gatewayToken, string.Empty)
                 : (null, "Unity returned an expired Cloud credential. Sign in again and retry.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

@@ -13,6 +13,12 @@ public sealed partial class MainPage : Page
 
     public ProjectsPage? CurrentProjectsPage => ContentFrame.Content as ProjectsPage;
 
+    public void SetResourceSaving(bool enabled)
+    {
+        if (ContentFrame.Content is ProjectsPage projectsPage) projectsPage.SetResourceSaving(enabled);
+        if (ContentFrame.Content is EditorsPage editorsPage) editorsPage.SetResourceSaving(enabled);
+    }
+
     public MainPage()
     {
         InitializeComponent();
