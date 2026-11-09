@@ -53,17 +53,11 @@
                         IsOpen="False"
                         Severity="Success"
                         Title="Update available">
-                        <InfoBar.ActionButton>
-                            <Button
-                                Click="OnInstallUpdateClick"
-                                Content="Update now"
-                                Style="{StaticResource AccentButtonStyle}" />
-                        </InfoBar.ActionButton>
                         <InfoBar.Content>
                             <HyperlinkButton
                                 Padding="0"
                                 Click="OnSeeChangesClick"
-                                Content="See changes" />
+                                Content="View release" />
                         </InfoBar.Content>
                     </InfoBar>
                 </StackPanel>

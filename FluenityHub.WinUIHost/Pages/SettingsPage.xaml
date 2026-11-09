@@ -635,20 +635,12 @@
                         IsClosable="True"
                         IsOpen="False"
                         Severity="Success">
-                        <InfoBar.ActionButton>
-                            <Button
-                                x:Name="SettingsInstallUpdateBtn"
-                                Click="OnSettingsInstallUpdateClick"
-                                Content="Download update"
-                                Style="{StaticResource AccentButtonStyle}"
-                                Visibility="Collapsed" />
-                        </InfoBar.ActionButton>
                         <InfoBar.Content>
                             <HyperlinkButton
                                 x:Name="SettingsSeeChangesBtn"
                                 VerticalAlignment="Center"
                                 Click="OnSettingsSeeChangesClick"
-                                Content="See changes"
+                                Content="View release"
                                 Visibility="Collapsed" />
                         </InfoBar.Content>
                     </InfoBar>

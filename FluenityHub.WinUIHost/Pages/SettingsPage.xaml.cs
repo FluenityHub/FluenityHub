@@ -1144,7 +1144,7 @@ public sealed partial class SettingsPage : Page
         InfoBarSeverity severity,
         string title,
         string message,
-        bool showActions)
+        bool showReleaseLink)
     {
         if (SettingsUpdateInfoBar is null) return;
 
@@ -1157,15 +1157,13 @@ public sealed partial class SettingsPage : Page
         SettingsUpdateInfoBar.Title = title;
         SettingsUpdateInfoBar.Message = message;
 
-        if (SettingsInstallUpdateBtn is not null)
-            SettingsInstallUpdateBtn.Visibility = showActions ? Visibility.Visible : Visibility.Collapsed;
         if (SettingsSeeChangesBtn is not null)
-            SettingsSeeChangesBtn.Visibility = showActions ? Visibility.Visible : Visibility.Collapsed;
+            SettingsSeeChangesBtn.Visibility = showReleaseLink ? Visibility.Visible : Visibility.Collapsed;
 
         SettingsUpdateInfoBar.Visibility = Visibility.Visible;
         SettingsUpdateInfoBar.IsOpen = true;
 
-        if (showActions) return;
+        if (showReleaseLink) return;
 
         try
         {
@@ -1199,17 +1197,16 @@ public sealed partial class SettingsPage : Page
             if (updateInfo.HasUpdate)
             {
                 ShowSettingsUpdateInfoBar(
-                    updateInfo.DownloadUrl is null ? InfoBarSeverity.Warning : InfoBarSeverity.Informational,
+                    InfoBarSeverity.Informational,
                     $"FluenityHub v{updateInfo.LatestVersion} is available",
-                    updateInfo.ErrorMessage ?? (string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
+                    string.IsNullOrWhiteSpace(updateInfo.ReleaseTitle)
                         ? "A new version of FluenityHub is available."
-                        : updateInfo.ReleaseTitle),
-                    showActions: true);
-                SettingsInstallUpdateBtn.Visibility = updateInfo.DownloadUrl is null ? Visibility.Collapsed : Visibility.Visible;
+                        : updateInfo.ReleaseTitle,
+                    showReleaseLink: true);
             }
             else if (!string.IsNullOrWhiteSpace(updateInfo.ErrorMessage))
             {
-                ShowSettingsUpdateInfoBar(InfoBarSeverity.Warning, "Unable to check for updates", updateInfo.ErrorMessage, showActions: false);
+                ShowSettingsUpdateInfoBar(InfoBarSeverity.Warning, "Unable to check for updates", updateInfo.ErrorMessage, showReleaseLink: false);
             }
             else
             {
@@ -1217,7 +1214,7 @@ public sealed partial class SettingsPage : Page
                     InfoBarSeverity.Success,
                     "FluenityHub is up to date",
                     $"You are running the latest version (v{AppUpdateService.CurrentVersion}).",
-                    showActions: false);
+                    showReleaseLink: false);
             }
         }
         catch (Exception ex)
@@ -1226,7 +1223,7 @@ public sealed partial class SettingsPage : Page
                 InfoBarSeverity.Error,
                 "Unable to check for updates",
                 ex.Message,
-                showActions: false);
+                showReleaseLink: false);
         }
         finally
         {
@@ -1240,14 +1237,9 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private async void OnSettingsInstallUpdateClick(object sender, RoutedEventArgs e)
-    {
-        if (_settingsUpdateInfo is { } update) await Dialogs.AppUpdateDialog.ShowAsync(this, update);
-    }
-
     private void OnSettingsSeeChangesClick(object sender, RoutedEventArgs e)
     {
-        var targetUrl = _settingsUpdateInfo?.ReleaseUrl ?? "https://github.com/FluenityHub/FluenityHub/releases";
+        var targetUrl = _settingsUpdateInfo?.ReleaseUrl ?? AppUpdateService.ReleasesUrl;
         OpenUrl(targetUrl);
     }
 

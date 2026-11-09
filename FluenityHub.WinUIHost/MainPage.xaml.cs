@@ -28,7 +28,6 @@ public sealed partial class MainPage : Page
         NavigateTopLevel(typeof(ProjectsPage), new SuppressNavigationTransitionInfo());
     }
 
-    public event EventHandler? InstallUpdateRequested;
     public event EventHandler? SeeChangesRequested;
 
     public void ShowAppUpdate(string title, string message)
@@ -37,9 +36,6 @@ public sealed partial class MainPage : Page
         AppUpdateInfoBar.Message = message;
         AppUpdateInfoBar.IsOpen = true;
     }
-
-    private void OnInstallUpdateClick(object sender, RoutedEventArgs e)
-        => InstallUpdateRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnSeeChangesClick(object sender, RoutedEventArgs e)
         => SeeChangesRequested?.Invoke(this, EventArgs.Empty);

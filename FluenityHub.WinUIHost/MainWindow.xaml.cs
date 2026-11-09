@@ -211,7 +211,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        mainPage.InstallUpdateRequested += OnInstallUpdateRequested;
         mainPage.SeeChangesRequested += OnSeeChangesRequested;
 
         if (!string.IsNullOrWhiteSpace(destination))
@@ -257,16 +256,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnInstallUpdateRequested(object? sender, EventArgs e)
-    {
-        if (MainPage.Instance is { } page && _currentUpdateInfo is { } update)
-            await Dialogs.AppUpdateDialog.ShowAsync(page, update);
-    }
-
     private void OnSeeChangesRequested(object? sender, EventArgs e)
     {
         var targetUrl = _currentUpdateInfo?.ReleaseUrl
-            ?? "https://github.com/FluenityHub/FluenityHub/releases";
+            ?? AppUpdateService.ReleasesUrl;
         OpenExternalUrl(targetUrl);
     }
     private static void OpenExternalUrl(string url)
