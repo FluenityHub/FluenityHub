@@ -1375,8 +1375,8 @@ public sealed partial class EditorsPage : Page
 
                 case LaunchEditorChoice.NewProject:
                     {
-                        var installedVersions = _allEditors.Select(e => e.Version).ToList();
-                        var newProjDialog = new NewProjectDialog(installedVersions, selectedTemplate: null, initialVersion: editor.Version)
+                        var installedEditors = _allEditors.ToDictionary(e => e.Version, e => e.ExecutablePath, StringComparer.OrdinalIgnoreCase);
+                        var newProjDialog = new NewProjectDialog(installedEditors, selectedTemplate: null, initialVersion: editor.Version)
                         {
                             XamlRoot = xamlRoot,
                             RequestedTheme = targetTheme

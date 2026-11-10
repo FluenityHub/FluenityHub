@@ -46,6 +46,7 @@ public sealed partial class ProjectsPage : Page
     private bool _sortAscending = false;
     private bool _isSyncingFlyout;
     private bool _isReloadingData;
+    private bool _isShowingNewProjectDialog;
     private bool _hasCompletedEditorDiscovery;
     private bool _isResourceSaving;
     private string? _suspendedSelectionPath;
@@ -1441,190 +1442,32 @@ public sealed partial class ProjectsPage : Page
         }
     }
 
-    private async void OnNewProjectClick(object sender, RoutedEventArgs e)
+    private void OnNewProjectClick(object sender, RoutedEventArgs e) =>
+        MainPage.Instance?.ShowNewProjectPage();
+
+    internal async Task ShowCompactNewProjectDialogAsync()
     {
+        if (_isShowingNewProjectDialog || XamlRoot is null) return;
+        _isShowingNewProjectDialog = true;
         try
         {
-            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
-            if (xamlRoot is null) return;
-
-            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
-                ?? MainWindow.Instance?.CurrentTheme
-                ?? ElementTheme.Default;
-
-            var installedVersions = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
-            if (!installedVersions.Any())
-            {
-                var noEditorDialog = new ContentDialog
-                {
-                    Title = "Locate or install Unity Editor",
-                    Content = new TextBlock
-                    {
-                        Text = "Locate or install a Unity Editor version for your new project.",
-                        TextWrapping = TextWrapping.Wrap,
-                        Style = Application.Current.Resources["BodyTextBlockStyle"] as Style
-                    },
-                    PrimaryButtonText = "Install Editor",
-                    SecondaryButtonText = "Locate",
-                    CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Primary,
-                    XamlRoot = xamlRoot,
-                    RequestedTheme = targetTheme,
-                    Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style
-                };
-
-                var choice = await noEditorDialog.ShowAsync();
-                if (choice == ContentDialogResult.Primary)
-                {
-                    await ShowInstallEditorFlowAsync();
-                }
-                else if (choice == ContentDialogResult.Secondary)
-                {
-                    await LocateEditorFlowAsync();
-                }
-                return;
-            }
-
-            string? defaultVersion = null;
-            try
-            {
-                defaultVersion = await UnityEditorPreferenceService.GetDefaultVersionAsync(CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                ShowStatus($"Default Editor could not be loaded: {ex.Message}", InfoBarSeverity.Warning);
-            }
-
-            var dialog = new FluenityHub_WinUIHost.Dialogs.NewProjectDialog(installedVersions, initialVersion: defaultVersion)
-            {
-                XamlRoot = xamlRoot,
-                RequestedTheme = targetTheme
-            };
-
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(dialog.CreatedProjectPath))
-            {
-                _projectService.AddOrUpdateProject(dialog.CreatedProjectPath, dialog.CreatedProjectTitle, dialog.SelectedVersion);
-                ReloadData(showSuccessMessage: false);
-                ShowStatus($"New project '{dialog.CreatedProjectTitle}' created successfully.", InfoBarSeverity.Success);
-                _ = JumpListService.RefreshAsync();
-            }
+            var dialog = new NewProjectDialog { XamlRoot = XamlRoot };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            _projectService.AddOrUpdateProject(dialog.CreatedProjectPath, dialog.CreatedProjectTitle, dialog.SelectedVersion);
+            NotifyProjectCreated(dialog.CreatedProjectTitle);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Runtime.InteropServices.COMException or System.Text.Json.JsonException)
         {
-            System.Diagnostics.Debug.WriteLine($"OnNewProjectClick failed: {ex}");
+            ShowStatus($"Project could not be created: {ex.Message}", InfoBarSeverity.Error);
         }
+        finally { _isShowingNewProjectDialog = false; }
     }
 
-    public async void TriggerNewProjectFlow()
+    internal void NotifyProjectCreated(string title)
     {
-        try
-        {
-            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
-            if (xamlRoot is null) return;
-
-            OnNewProjectClick(this, new RoutedEventArgs());
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"TriggerNewProjectFlow failed: {ex}");
-        }
-    }
-
-    private async Task ShowInstallEditorFlowAsync()
-    {
-        try
-        {
-            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
-            if (xamlRoot is null) return;
-
-            var targetTheme = (xamlRoot.Content as FrameworkElement)?.RequestedTheme
-                ?? MainWindow.Instance?.CurrentTheme
-                ?? ElementTheme.Default;
-
-            var allInstalled = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
-            var dialog = new InstallEditorDialog(allInstalled)
-            {
-                XamlRoot = xamlRoot,
-                RequestedTheme = targetTheme
-            };
-            await dialog.ShowAsync();
-            if (dialog.SelectedRelease is null)
-            {
-                return;
-            }
-
-            _settings = _settingsStore.Load();
-            var installRoot = _unityHubLocationSettingsService.GetInstallLocation();
-            var modulesDialog = new AddModulesDialog(dialog.SelectedRelease, installRoot)
-            {
-                XamlRoot = xamlRoot,
-                RequestedTheme = targetTheme
-            };
-            await modulesDialog.ShowAsync();
-            if (modulesDialog.InstallationRequest is null)
-            {
-                return;
-            }
-
-            var result = _moduleInstallationManager.Enqueue(modulesDialog.InstallationRequest);
-            ShowStatus(
-                result.Message,
-                result.Accepted ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
-            if (result.Accepted)
-            {
-                ReloadData(showSuccessMessage: false);
-            }
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Unable to open Install Editor: {ex.Message}", InfoBarSeverity.Error);
-        }
-    }
-
-    private async Task LocateEditorFlowAsync()
-    {
-        try
-        {
-            var xamlRoot = await XamlRootResolver.ResolveAsync(this);
-            if (xamlRoot is null) return;
-            var windowId = xamlRoot.ContentIslandEnvironment.AppWindowId;
-
-            var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(windowId)
-            {
-                Title = "Add a Unity Editor",
-                CommitButtonText = "Select folder",
-                SuggestedStartLocation = Microsoft.Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
-                ViewMode = Microsoft.Windows.Storage.Pickers.PickerViewMode.List
-            };
-
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null)
-            {
-                var folderPath = folder.Path;
-                _settings = _settingsStore.Load();
-                var updatedPaths = new List<string>(_settings.CustomEditorPaths);
-                if (!updatedPaths.Contains(folderPath, StringComparer.OrdinalIgnoreCase))
-                {
-                    updatedPaths.Add(folderPath);
-                    _settings.CustomEditorPaths = updatedPaths;
-                    _settingsStore.Save(_settings);
-                }
-
-                ReloadData(showSuccessMessage: false);
-                ShowStatus($"Located Unity Editor folder: {folderPath}", InfoBarSeverity.Success);
-
-                var installedAfterLocate = _editorLocator.GetInstalledEditors(_settings.CustomEditorPaths).Keys;
-                if (installedAfterLocate.Any())
-                {
-                    OnNewProjectClick(this, new RoutedEventArgs());
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Failed to locate Editor folder: {ex.Message}", InfoBarSeverity.Error);
-        }
+        ReloadData(showSuccessMessage: false);
+        ShowStatus($"New project '{title}' created successfully.", InfoBarSeverity.Success);
+        _ = JumpListService.RefreshAsync();
     }
 
     private void OnDisplayOptionClick(object sender, RoutedEventArgs e)

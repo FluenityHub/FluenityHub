@@ -7,6 +7,7 @@ public sealed class AppSettings
     public string AppTheme { get; set; } = "Default";
     public int MinimizeBehavior { get; set; } = 1;
     public bool LowerPriorityWhenUnityOpens { get; set; } = true;
+    public bool UseCompactNewProjectDialog { get; set; } = false;
     public bool EnableSourceControl { get; set; } = true;
     public Dictionary<string, string> GitAccounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool ExplorerContextMenuEnabled { get; set; } = false;

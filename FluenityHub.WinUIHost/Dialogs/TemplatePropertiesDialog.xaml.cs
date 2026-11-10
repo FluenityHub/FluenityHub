@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using FluenityHub_WinUIHost.Models;
+using FluenityHub_WinUIHost.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -18,16 +19,24 @@ public sealed class TemplatePackageInfo
 
 public sealed partial class TemplatePropertiesDialog : ContentDialog
 {
-    public CustomTemplateInfo TemplateInfo { get; }
+    public string TemplateName { get; }
+    public string TemplateVersion { get; }
+    public string TemplateDescription { get; }
+    public string LocationDisplay { get; }
+    public string DetailsLabel { get; }
     public string EditorVersionDisplay { get; }
     public string CreatedAtDisplay { get; }
     public string SizeDisplay { get; }
     public string CategoryDisplay { get; }
-    public string TagsDisplay { get; }
+    public string DetailsDisplay { get; }
 
     public TemplatePropertiesDialog(CustomTemplateInfo template)
     {
-        TemplateInfo = template;
+        TemplateName = template.Name;
+        TemplateVersion = template.DisplayVersion;
+        TemplateDescription = template.DisplayDescription;
+        LocationDisplay = template.TemplateFolderPath;
+        DetailsLabel = "Tags";
         EditorVersionDisplay = string.IsNullOrWhiteSpace(template.EditorVersion)
             ? "Not specified"
             : template.EditorVersion;
@@ -36,13 +45,73 @@ public sealed partial class TemplatePropertiesDialog : ContentDialog
         CategoryDisplay = template.Id.StartsWith("com.unity.template.", StringComparison.OrdinalIgnoreCase)
             ? "Unity"
             : "Custom";
-        TagsDisplay = template.Tags.Count == 0
+        DetailsDisplay = template.Tags.Count == 0
             ? "None"
             : string.Join(", ", template.Tags);
 
         InitializeComponent();
 
-        var packages = ReadPackages(template.TemplateFolderPath);
+        SetPackages(ReadPackages(template.TemplateFolderPath));
+        OpenLocationButton.IsEnabled = Directory.Exists(LocationDisplay);
+    }
+
+    internal TemplatePropertiesDialog(UnityProjectTemplateItem item, string editorVersion)
+    {
+        var template = item.Template;
+        TemplateName = template.Name;
+        TemplateVersion = template.HasVersion ? template.Version : "Not specified";
+        TemplateDescription = string.IsNullOrWhiteSpace(template.Description) ? "No description provided." : template.Description;
+        EditorVersionDisplay = editorVersion;
+        CreatedAtDisplay = string.Empty;
+        CategoryDisplay = template.CardCategory;
+        DetailsLabel = "Availability";
+        DetailsDisplay = template.ArchivePath is not null ? "Included with the Editor" :
+            item.IsDownloaded ? "Downloaded" : item.IsDownloading ? "Downloading" : "Not downloaded";
+        LocationDisplay = template.ArchivePath ?? (item.CanRemoveDownload
+            ? UnityTemplateCatalogService.GetArchiveCachePath(template, item.DownloadDirectory) : string.Empty);
+        SizeDisplay = FormatFileSize(template.ArchivePath is { } path && File.Exists(path)
+            ? new FileInfo(path).Length : template.DownloadSize);
+        InitializeComponent();
+
+        CreatedAtPanel.Visibility = Visibility.Collapsed;
+        LocationPanel.Visibility = LocationDisplay.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        OpenLocationButton.IsEnabled = LocationDisplay.Length > 0;
+        if (LocationDisplay.Length == 0)
+        {
+            SetPackages([], template.DownloadUri is null ? "This template has no associated packages." :
+                "Download the template to view its packages.");
+            return;
+        }
+
+        SetPackages([], "Reading packages...");
+        Loaded += ReadArchivePackages;
+    }
+
+    private async void ReadArchivePackages(object sender, RoutedEventArgs args)
+    {
+        Loaded -= ReadArchivePackages;
+        using var request = new CancellationTokenSource();
+        void CancelRead(ContentDialog dialog, ContentDialogClosedEventArgs closedArgs) => request.Cancel();
+        Closed += CancelRead;
+        try
+        {
+            var metadata = await Task.Run(() =>
+                UnityTemplateCatalogService.ReadArchiveMetadataAsync(LocationDisplay, request.Token), request.Token);
+            if (!request.IsCancellationRequested)
+                SetPackages(metadata is { } document ? ReadDependencies(document) : []);
+        }
+        catch (OperationCanceledException) when (request.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or OperationCanceledException)
+        {
+            Debug.WriteLine($"Template package metadata could not be read: {ex.GetType().Name}");
+            if (!request.IsCancellationRequested)
+                SetPackages([], "Package details couldn't be read from this archive.");
+        }
+        finally { Closed -= CancelRead; }
+    }
+
+    private void SetPackages(IReadOnlyList<TemplatePackageInfo> packages, string emptyMessage = "This template has no associated packages.")
+    {
         PackagesListView.ItemsSource = packages;
         PackagesTable.Visibility = packages.Count == 0
             ? Visibility.Collapsed
@@ -50,19 +119,20 @@ public sealed partial class TemplatePropertiesDialog : ContentDialog
         NoPackagesTextBlock.Visibility = packages.Count == 0
             ? Visibility.Visible
             : Visibility.Collapsed;
-        OpenLocationButton.IsEnabled = Directory.Exists(template.TemplateFolderPath);
+        NoPackagesTextBlock.Text = emptyMessage;
     }
 
     private void OnOpenLocationClick(object sender, RoutedEventArgs e)
     {
-        if (!Directory.Exists(TemplateInfo.TemplateFolderPath))
+        var folder = File.Exists(LocationDisplay) ? Path.GetDirectoryName(LocationDisplay) : LocationDisplay;
+        if (!Directory.Exists(folder))
         {
             return;
         }
 
         Process.Start(new ProcessStartInfo
         {
-            FileName = TemplateInfo.TemplateFolderPath,
+            FileName = folder,
             UseShellExecute = true
         });
     }
@@ -78,28 +148,31 @@ public sealed partial class TemplatePropertiesDialog : ContentDialog
             }
 
             using var document = JsonDocument.Parse(File.ReadAllText(packageJsonPath));
-            if (!document.RootElement.TryGetProperty("dependencies", out var dependencies) ||
-                dependencies.ValueKind != JsonValueKind.Object)
-            {
-                return [];
-            }
-
-            return dependencies.EnumerateObject()
-                .Select(dependency => new TemplatePackageInfo
-                {
-                    Name = dependency.Name,
-                    Version = dependency.Value.ValueKind == JsonValueKind.String
-                        ? dependency.Value.GetString() ?? string.Empty
-                        : dependency.Value.ToString()
-                })
-                .OrderBy(package => package.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            return ReadDependencies(document.RootElement);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             Debug.WriteLine($"Template package metadata could not be read: {ex.Message}");
             return [];
         }
+    }
+
+    private static IReadOnlyList<TemplatePackageInfo> ReadDependencies(JsonElement document)
+    {
+        if (document.ValueKind != JsonValueKind.Object || !document.TryGetProperty("dependencies", out var dependencies) ||
+            dependencies.ValueKind != JsonValueKind.Object)
+            return [];
+
+        return dependencies.EnumerateObject()
+            .Select(dependency => new TemplatePackageInfo
+            {
+                Name = dependency.Name,
+                Version = dependency.Value.ValueKind == JsonValueKind.String
+                    ? dependency.Value.GetString() ?? string.Empty
+                    : dependency.Value.ToString()
+            })
+            .OrderBy(package => package.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static long GetContentSize(CustomTemplateInfo template)

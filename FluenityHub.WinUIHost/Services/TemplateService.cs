@@ -46,7 +46,9 @@ public sealed class TemplateService
             .ToList();
     }
 
-    public List<CustomTemplateInfo> GetCustomTemplates()
+    public List<CustomTemplateInfo> GetCustomTemplates() => GetCustomTemplates(repairMetadata: true);
+
+    internal List<CustomTemplateInfo> GetCustomTemplates(bool repairMetadata)
     {
         var result = new Dictionary<string, CustomTemplateInfo>(StringComparer.OrdinalIgnoreCase);
 
@@ -142,6 +144,8 @@ public sealed class TemplateService
                                 CreatedAt = creationDate
                             };
                         }
+                        if (!repairMetadata) continue;
+
                         // Check if package.json is missing any of the 6 keys required by Unity Hub:
                         // name, displayName, version, unity, description, dependencies
                         var hasDependencies = root.TryGetProperty("dependencies", out _);
@@ -807,14 +811,48 @@ public sealed class TemplateService
         return bytes.Contains((byte)0);
     }
 
-    private static void ExtractTarGz(string tgzFilePath, string outputDirectory)
+    internal static void CreateProjectFromOfficialTemplate(
+        string archivePath, string targetProjectPath, string editorVersion, CancellationToken cancellationToken)
+    {
+        var target = Path.GetFullPath(targetProjectPath);
+        var parent = Path.GetDirectoryName(target) ?? throw new ArgumentException("Choose a valid project location.");
+        if (Directory.Exists(target) || File.Exists(target))
+            throw new IOException("A project with this name already exists in the selected location.");
+        var staging = Path.Combine(parent, $".template-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+        try
+        {
+            ExtractTarGz(archivePath, staging, cancellationToken, official: true);
+            var settings = Path.Combine(staging, "ProjectSettings");
+            if (!Directory.Exists(settings) || !File.Exists(Path.Combine(staging, "Packages", "manifest.json")))
+                throw new InvalidDataException("The Unity template archive does not contain a complete project.");
+            Directory.CreateDirectory(Path.Combine(staging, "Assets"));
+            File.WriteAllText(Path.Combine(settings, "ProjectVersion.txt"), $"m_EditorVersion: {editorVersion}\r\n");
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.Move(staging, target);
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+            {
+                try { Directory.Delete(staging, recursive: true); }
+                catch (IOException ex) { System.Diagnostics.Debug.WriteLine(ex); }
+                catch (UnauthorizedAccessException ex) { System.Diagnostics.Debug.WriteLine(ex); }
+            }
+        }
+    }
+
+    private static void ExtractTarGz(string tgzFilePath, string outputDirectory,
+        CancellationToken cancellationToken = default, bool official = false)
     {
         using var fileStream = File.OpenRead(tgzFilePath);
         using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress);
         using var tarReader = new TarReader(gzipStream);
 
+        long extractedBytes = 0;
         while (tarReader.GetNextEntry() is { } entry)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var name = entry.Name.Replace('\\', '/');
             string relativePath;
 
@@ -836,6 +874,8 @@ public sealed class TemplateService
 
             if (string.IsNullOrWhiteSpace(relativePath)) continue;
 
+            if (official && relativePath.TrimEnd('/').Split('/').Any(part => !IsSafeRootFileName(part)))
+                throw new InvalidDataException("The Unity template contains an invalid file path.");
             var targetPath = GetSafeExtractionPath(outputDirectory, relativePath);
 
             if (entry.EntryType == TarEntryType.Directory)
@@ -844,9 +884,13 @@ public sealed class TemplateService
             }
             else if (entry.EntryType == TarEntryType.RegularFile || entry.EntryType == TarEntryType.V7RegularFile)
             {
+                if (official && (extractedBytes += entry.Length) > 32L * 1024 * 1024 * 1024)
+                    throw new InvalidDataException("The Unity template exceeds the maximum extracted size.");
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-                entry.ExtractToFile(targetPath, overwrite: true);
+                entry.ExtractToFile(targetPath, overwrite: !official);
             }
+            else if (official)
+                throw new InvalidDataException("The Unity template contains an unsupported file type.");
         }
     }
 

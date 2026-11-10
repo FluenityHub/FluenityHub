@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="FluenityHub_WinUIHost.Pages.NewProjectPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:FluenityHub_WinUIHost.Controls"
+    xmlns:models="using:FluenityHub_WinUIHost.Models"
+    Loaded="OnPageLoaded">
+
+    <Page.Resources>
+        <x:Double x:Key="BreadcrumbBarChevronFontSize">20</x:Double>
+        <x:Double x:Key="BreadcrumbBarItemThemeFontSize">28</x:Double>
+        <Thickness x:Key="BreadcrumbBarChevronPadding">8,2,8,0</Thickness>
+        <SolidColorBrush x:Key="BreadcrumbBarForegroundBrush" Color="{ThemeResource TextFillColorSecondary}" />
+        <SolidColorBrush x:Key="BreadcrumbBarHoverForegroundBrush" Color="{ThemeResource TextFillColorPrimary}" />
+        <SolidColorBrush x:Key="BreadcrumbBarPressedForegroundBrush" Color="{ThemeResource TextFillColorSecondary}" />
+        <SolidColorBrush x:Key="BreadcrumbBarCurrentNormalForegroundBrush" Color="{ThemeResource TextFillColorPrimary}" />
+        <SolidColorBrush x:Key="BreadcrumbBarChevronForegroundBrush" Color="{ThemeResource TextFillColorSecondary}" />
+        <Storyboard x:Name="GalleryRevealStoryboard">
+            <DoubleAnimation Storyboard.TargetName="GalleryRevealTransform" Storyboard.TargetProperty="Y" From="8" To="0" Duration="0:0:0.18">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="TemplatesGallery" Storyboard.TargetProperty="Opacity" From="0.82" To="1" Duration="0:0:0.18" />
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid Margin="36,24,16,24" RowSpacing="16">
+        <Grid.ChildrenTransitions>
+            <RepositionThemeTransition IsStaggeringEnabled="False" />
+        </Grid.ChildrenTransitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <BreadcrumbBar
+            x:Name="ProjectsBreadcrumbBar"
+            AutomationProperties.Name="Projects navigation path"
+            ItemClicked="OnBreadcrumbItemClicked">
+            <BreadcrumbBar.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="{Binding}" />
+                </DataTemplate>
+            </BreadcrumbBar.ItemTemplate>
+        </BreadcrumbBar>
+
+        <Grid x:Name="Workspace" Grid.Row="1" RowSpacing="16" SizeChanged="OnWorkspaceSizeChanged">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="GalleryRow" Height="2*" />
+                <RowDefinition x:Name="FormRow" Height="3*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="GalleryColumn" Width="0" />
+                <ColumnDefinition x:Name="FormColumn" Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Grid x:Name="GalleryPanel" Grid.Column="1" RowSpacing="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Spacing="8">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <AutoSuggestBox
+                        x:Name="TemplateSearchBox"
+                        Width="240"
+                        Height="32"
+                        AutomationProperties.Name="Search templates"
+                        PlaceholderText="Search templates"
+                        QueryIcon="Find"
+                        TextChanged="OnTemplateSearchChanged" />
+                    <Button
+                        x:Name="RefreshTemplatesButton"
+                        Grid.Column="1"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        AutomationProperties.Name="Refresh templates"
+                        Click="OnRefreshTemplatesClick"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Refresh templates">
+                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                    </Button>
+                    <ComboBox
+                        x:Name="CategoryComboBox"
+                        Grid.Column="3"
+                        AutomationProperties.Name="Template category"
+                        SelectedIndex="0"
+                        SelectionChanged="OnCategoryChanged">
+                        <x:String>All</x:String>
+                        <x:String>Core</x:String>
+                        <x:String>Sample</x:String>
+                        <x:String>Learning</x:String>
+                        <x:String>Custom</x:String>
+                    </ComboBox>
+                </Grid>
+                    <InfoBar
+                        x:Name="EditorDiscoveryInfoBar"
+                        IsClosable="False"
+                        IsOpen="False"
+                        Severity="Warning">
+                        <InfoBar.ActionButton>
+                            <Button
+                                x:Name="OpenInstallsButton"
+                                Click="OnOpenInstallsClick"
+                                Content="Open Installs"
+                                Visibility="Collapsed" />
+                        </InfoBar.ActionButton>
+                    </InfoBar>
+                    <InfoBar x:Name="DownloadErrorInfoBar" IsOpen="False" IsClosable="True" Severity="Error" Title="Template couldn't be downloaded" />
+                </StackPanel>
+                <Grid Grid.Row="1">
+                    <ItemsView
+                        x:Name="TemplatesGallery"
+                        AutomationProperties.Name="Project templates"
+                        SelectionChanged="OnGallerySelectionChanged"
+                        SelectionMode="Single">
+                        <ItemsView.RenderTransform>
+                            <TranslateTransform x:Name="GalleryRevealTransform" />
+                        </ItemsView.RenderTransform>
+                        <ItemsView.Layout>
+                            <UniformGridLayout
+                                ItemsStretch="Fill"
+                                MinColumnSpacing="8"
+                                MinItemHeight="184"
+                                MinItemWidth="224"
+                                MinRowSpacing="8"
+                                Orientation="Horizontal" />
+                        </ItemsView.Layout>
+                        <ItemsView.ItemTemplate>
+                            <DataTemplate x:DataType="models:UnityProjectTemplateItem">
+                                <ItemContainer AutomationProperties.Name="{x:Bind Template.DisplayName, Mode=OneTime}">
+                                    <ItemContainer.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem
+                                                Click="OnDownloadTemplateClick"
+                                                Tag="{x:Bind}"
+                                                Text="{x:Bind DownloadCommandText, Mode=OneWay}"
+                                                IsEnabled="{x:Bind CanUseDownloadCommand, Mode=OneWay}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="{x:Bind DownloadCommandGlyph, Mode=OneWay}" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem
+                                                Click="OnOpenTemplateInExplorerClick"
+                                                IsEnabled="{x:Bind HasLocalPath, Mode=OneWay}"
+                                                Tag="{x:Bind}"
+                                                Text="Open in File Explorer">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE8B7;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem
+                                                Click="OnCopyTemplatePathClick"
+                                                IsEnabled="{x:Bind HasLocalPath, Mode=OneWay}"
+                                                Tag="{x:Bind}"
+                                                Text="Copy as path"
+                                                Icon="Copy" />
+                                            <MenuFlyoutItem Click="OnTemplatePropertiesClick" Tag="{x:Bind}" Text="Properties">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE90F;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem
+                                                Click="OnRemoveTemplateDownloadClick"
+                                                Tag="{x:Bind}"
+                                                Text="Remove download"
+                                                IsEnabled="{x:Bind CanRemoveDownload, Mode=OneWay}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <SymbolIcon Symbol="Delete" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyout>
+                                    </ItemContainer.ContextFlyout>
+                                <Border
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="96" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <controls:TemplateCardBanner
+                                            Grid.RowSpan="2"
+                                            Height="116"
+                                            VerticalAlignment="Top"
+                                            BannerBrush="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                            CoverSource="{x:Bind CoverSource, Mode=OneTime}"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            PreviewUri="{x:Bind Template.PreviewUri, Mode=OneTime}" />
+                                        <Border
+                                            Margin="8,0,0,0"
+                                            Padding="6,2"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Bottom"
+                                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}">
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Template.CardCategory, Mode=OneTime}" />
+                                        </Border>
+                                        <Button
+                                            Width="32"
+                                            Height="32"
+                                            Margin="8"
+                                            Padding="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top"
+                                            AutomationProperties.Name="{x:Bind DownloadAction, Mode=OneWay}"
+                                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                            Click="OnDownloadTemplateClick"
+                                            IsEnabled="{x:Bind CanDownload, Mode=OneWay}"
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{x:Bind DownloadAction, Mode=OneWay}"
+                                            Visibility="{x:Bind HasDownload, Mode=OneTime}">
+                                            <FontIcon FontSize="16" Glyph="{x:Bind DownloadGlyph, Mode=OneWay}" />
+                                        </Button>
+                                        <Border
+                                            Margin="8,0,8,0"
+                                            Padding="6,2"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Bottom"
+                                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}"
+                                            Visibility="{x:Bind IsDownloaded, Mode=OneWay}">
+                                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Downloaded" />
+                                        </Border>
+                                        <StackPanel Grid.Row="1" Margin="12,8,12,8" Spacing="4">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    MaxLines="2"
+                                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                    Text="{x:Bind Template.Name, Mode=OneTime}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="Wrap" />
+                                                <Border
+                                                    Grid.Column="1"
+                                                    Padding="5,1"
+                                                    VerticalAlignment="Top"
+                                                    Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                                                    Visibility="{x:Bind Template.HasVersion, Mode=OneTime}">
+                                                    <TextBlock
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                                        Text="{x:Bind Template.Version, Mode=OneTime}" />
+                                                </Border>
+                                            </Grid>
+                                            <Grid MinHeight="32">
+                                                <TextBlock
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    MaxLines="2"
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind Template.Description, Mode=OneTime}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="Wrap"
+                                                    Visibility="{x:Bind ShowDescription, Mode=OneWay}" />
+                                                <StackPanel
+                                                    VerticalAlignment="Center"
+                                                    Spacing="6"
+                                                    Visibility="{x:Bind IsDownloading, Mode=OneWay}">
+                                                    <Grid>
+                                                        <TextBlock
+                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                                            Text="Downloading" />
+                                                        <TextBlock
+                                                            HorizontalAlignment="Right"
+                                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                                            Text="{x:Bind DownloadProgressText, Mode=OneWay}" />
+                                                    </Grid>
+                                                    <ProgressBar
+                                                        AutomationProperties.Name="{x:Bind Template.Name, Mode=OneTime}"
+                                                        Value="{x:Bind DownloadPercent, Mode=OneWay}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                </ItemContainer>
+                            </DataTemplate>
+                        </ItemsView.ItemTemplate>
+                    </ItemsView>
+                    <StackPanel
+                        x:Name="LoadingPanel"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        AutomationProperties.LiveSetting="Polite"
+                        Spacing="12">
+                        <ProgressRing
+                            x:Name="LoadingRing"
+                            Width="32"
+                            Height="32"
+                            HorizontalAlignment="Center"
+                            AutomationProperties.Name="Loading templates"
+                            IsActive="True" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource BodyTextBlockStyle}"
+                            Text="Loading templates..." />
+                    </StackPanel>
+                    <TextBlock
+                        x:Name="NoTemplatesTextBlock"
+                        Margin="12"
+                        AutomationProperties.LiveSetting="Polite"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="No templates match. Try a different search or category."
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Grid>
+
+            <Border
+                Grid.Row="1"
+                Grid.Column="1"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border
+                        Padding="12,10"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="7,7,0,0">
+                        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Project details" />
+                    </Border>
+                    <controls:NewProjectForm x:Name="ProjectForm" Grid.Row="1" Margin="12,12" Visibility="Collapsed" />
+                    <Border
+                        Grid.Row="2"
+                        Padding="12,12"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="0,1,0,0">
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="CancelButton" Click="OnCancelClick" Content="Cancel" />
+                            <Button
+                                x:Name="CreateButton"
+                                Click="OnCreateClick"
+                                Content="Create project"
+                                IsEnabled="False"
+                                Style="{StaticResource AccentButtonStyle}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

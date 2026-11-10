@@ -101,6 +101,20 @@
                         Text="Behavior" />
 
                     <controls:SettingsCard
+                        Header="New project"
+                        Description="Choose how to create a new Unity project"
+                        HeaderIcon="{ui:FontIcon Glyph=&#xE710;}">
+                        <ComboBox
+                            x:Name="NewProjectExperienceComboBox"
+                            MinWidth="160"
+                            AutomationProperties.Name="New project experience"
+                            SelectionChanged="OnNewProjectExperienceChanged">
+                            <ComboBoxItem Content="Template gallery" />
+                            <ComboBoxItem Content="Compact dialog" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+
+                    <controls:SettingsCard
                         Description="Control when FluenityHub minimizes to the system tray"
                         Header="Minimize to System tray when"
                         HeaderIcon="{ui:FontIcon Glyph=&#xE921;}">

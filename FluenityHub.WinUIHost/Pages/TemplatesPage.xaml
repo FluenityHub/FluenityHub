@@ -303,43 +303,13 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <Grid
+                                <controls:TemplateCardBanner
                                     Grid.RowSpan="2"
                                     Height="124"
                                     VerticalAlignment="Top"
-                                    CornerRadius="3,3,0,0">
-                                    <controls:OpacityMaskView IsHitTestVisible="False">
-                                        <controls:OpacityMaskView.OpacityMask>
-                                            <Rectangle>
-                                                <Rectangle.Fill>
-                                                    <LinearGradientBrush
-                                                        StartPoint="0.5,0"
-                                                        EndPoint="0.5,1">
-                                                        <GradientStop Offset="0" Color="White" />
-                                                        <GradientStop Offset="0.78" Color="White" />
-                                                        <GradientStop Offset="1" Color="Transparent" />
-                                                    </LinearGradientBrush>
-                                                </Rectangle.Fill>
-                                            </Rectangle>
-                                        </controls:OpacityMaskView.OpacityMask>
-                                        <Grid Background="{x:Bind PreviewBackgroundBrush}">
-                                            <FontIcon
-                                                Margin="0,0,0,24"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                FontSize="36"
-                                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                                                Glyph="&#xF158;" />
-                                            <Image
-                                                AutomationProperties.Name="{x:Bind Name}"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                Source="{x:Bind CoverImageSource}"
-                                                Stretch="UniformToFill"
-                                                Visibility="{x:Bind HasImage}" />
-                                        </Grid>
-                                    </controls:OpacityMaskView>
-                                </Grid>
+                                    BannerBrush="{x:Bind PreviewBackgroundBrush, Mode=OneTime}"
+                                    CoverSource="{x:Bind CoverImageSource, Mode=OneTime}"
+                                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
 
                                 <StackPanel
                                     Grid.Row="0"

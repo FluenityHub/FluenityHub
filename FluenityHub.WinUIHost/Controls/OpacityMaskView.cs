@@ -26,12 +26,21 @@ public sealed partial class OpacityMaskView : ContentControl
 
     private readonly Compositor _compositor =
         CompositionTarget.GetCompositorForCurrentThread();
-    private CompositionBrush? _mask;
+    private Grid? _rootGrid;
+    private ContentPresenter? _contentPresenter;
+    private Border? _maskContainer;
+    private CompositionVisualSurface? _sourceSurface;
+    private CompositionVisualSurface? _maskSurface;
+    private CompositionSurfaceBrush? _sourceBrush;
+    private CompositionSurfaceBrush? _mask;
     private CompositionMaskBrush? _maskBrush;
+    private SpriteVisual? _redirectVisual;
 
     public OpacityMaskView()
     {
         DefaultStyleKey = typeof(OpacityMaskView);
+        Loaded += (_, _) => CreateComposition();
+        Unloaded += (_, _) => ReleaseComposition();
     }
 
     public UIElement? OpacityMask
@@ -42,6 +51,7 @@ public sealed partial class OpacityMaskView : ContentControl
 
     protected override void OnApplyTemplate()
     {
+        ReleaseComposition();
         base.OnApplyTemplate();
 
         if (GetTemplateChild(RootGridTemplateName) is not Grid rootGrid ||
@@ -51,25 +61,60 @@ public sealed partial class OpacityMaskView : ContentControl
             return;
         }
 
-        _maskBrush = _compositor.CreateMaskBrush();
-        _maskBrush.Source = GetVisualBrush(contentPresenter);
-        _mask = GetVisualBrush(maskContainer);
-        _maskBrush.Mask = OpacityMask is null ? null : _mask;
-
-        var redirectVisual = _compositor.CreateSpriteVisual();
-        redirectVisual.RelativeSizeAdjustment = Vector2.One;
-        redirectVisual.Brush = _maskBrush;
-        ElementCompositionPreview.SetElementChildVisual(rootGrid, redirectVisual);
+        _rootGrid = rootGrid;
+        _contentPresenter = contentPresenter;
+        _maskContainer = maskContainer;
+        if (IsLoaded) CreateComposition();
     }
 
-    private static CompositionBrush GetVisualBrush(UIElement element)
+    private void CreateComposition()
+    {
+        if (_maskBrush is not null || _rootGrid is null || _contentPresenter is null || _maskContainer is null) return;
+        _maskBrush = _compositor.CreateMaskBrush();
+        _sourceBrush = GetVisualBrush(_contentPresenter, out _sourceSurface);
+        _maskBrush.Source = _sourceBrush;
+        _mask = GetVisualBrush(_maskContainer, out _maskSurface);
+        _maskBrush.Mask = OpacityMask is null ? null : _mask;
+
+        _redirectVisual = _compositor.CreateSpriteVisual();
+        _redirectVisual.RelativeSizeAdjustment = Vector2.One;
+        _redirectVisual.Brush = _maskBrush;
+        ElementCompositionPreview.SetElementChildVisual(_rootGrid, _redirectVisual);
+    }
+
+    private void ReleaseComposition()
+    {
+        if (_rootGrid is not null) ElementCompositionPreview.SetElementChildVisual(_rootGrid, null);
+        _sourceSurface?.StopAnimation(nameof(CompositionVisualSurface.SourceSize));
+        _maskSurface?.StopAnimation(nameof(CompositionVisualSurface.SourceSize));
+        if (_contentPresenter is not null) ElementCompositionPreview.GetElementVisual(_contentPresenter).Opacity = 1;
+        if (_maskContainer is not null) ElementCompositionPreview.GetElementVisual(_maskContainer).Opacity = 1;
+        if (_redirectVisual is not null) _redirectVisual.Brush = null;
+        if (_maskBrush is not null) { _maskBrush.Source = null; _maskBrush.Mask = null; }
+        if (_sourceSurface is not null) _sourceSurface.SourceVisual = null;
+        if (_maskSurface is not null) _maskSurface.SourceVisual = null;
+        _redirectVisual?.Dispose();
+        _maskBrush?.Dispose();
+        _sourceBrush?.Dispose();
+        _mask?.Dispose();
+        _sourceSurface?.Dispose();
+        _maskSurface?.Dispose();
+        _redirectVisual = null;
+        _maskBrush = null;
+        _sourceBrush = null;
+        _mask = null;
+        _sourceSurface = null;
+        _maskSurface = null;
+    }
+
+    private static CompositionSurfaceBrush GetVisualBrush(UIElement element, out CompositionVisualSurface visualSurface)
     {
         var visual = ElementCompositionPreview.GetElementVisual(element);
         var compositor = visual.Compositor;
-        var visualSurface = compositor.CreateVisualSurface();
+        visualSurface = compositor.CreateVisualSurface();
         visualSurface.SourceVisual = visual;
 
-        var sourceSizeAnimation =
+        using var sourceSizeAnimation =
             compositor.CreateExpressionAnimation($"{nameof(visual)}.Size");
         sourceSizeAnimation.SetReferenceParameter(nameof(visual), visual);
         visualSurface.StartAnimation(

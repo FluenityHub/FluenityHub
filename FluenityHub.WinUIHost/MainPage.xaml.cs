@@ -49,6 +49,14 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        if (ContentFrame.Content is NewProjectPage { IsCreating: true })
+        {
+            _isSynchronizingNavigation = true;
+            try { sender.SelectedItem = FindNavigationItem("projects"); }
+            finally { _isSynchronizingNavigation = false; }
+            return;
+        }
+
         if (args.IsSettingsSelected)
         {
             NavigateTopLevel(typeof(SettingsPage), args.RecommendedNavigationTransitionInfo);
@@ -79,7 +87,7 @@ public sealed partial class MainPage : Page
 
     public void GoBack()
     {
-        if (ContentFrame.CanGoBack)
+        if (ContentFrame.CanGoBack && ContentFrame.Content is not NewProjectPage { IsCreating: true })
         {
             ContentFrame.GoBack(new SlideNavigationTransitionInfo
             {
@@ -110,7 +118,7 @@ public sealed partial class MainPage : Page
             {
                 var pageType when pageType == typeof(SettingsPage) || pageType == typeof(LicensesPage) || pageType == typeof(LocationsPage)
                     => AppNavigationView.SettingsItem,
-                var pageType when pageType == typeof(ProjectsPage)
+                var pageType when pageType == typeof(ProjectsPage) || pageType == typeof(NewProjectPage)
                     => FindNavigationItem("projects"),
                 var pageType when pageType == typeof(TemplatesPage)
                     => FindNavigationItem("templates"),
@@ -242,24 +250,21 @@ public sealed partial class MainPage : Page
 
     public void NavigateToNewProject()
     {
-        AppNavigationView.SelectedItem = FindNavigationItem("projects");
-        if (ContentFrame.Content is ProjectsPage activeProjectsPage)
+        if (ContentFrame.Content is NewProjectPage) return;
+        NavigateToProjects();
+        ShowNewProjectPage();
+    }
+
+    internal void ShowNewProjectPage()
+    {
+        if (ContentFrame.Content is not ProjectsPage projectsPage) return;
+        if (new Services.AppSettingsStore().Load().UseCompactNewProjectDialog)
         {
-            activeProjectsPage.TriggerNewProjectFlow();
+            _ = projectsPage.ShowCompactNewProjectDialogAsync();
             return;
         }
-
-        NavigatedEventHandler? handler = null;
-        handler = (s, e) =>
-        {
-            ContentFrame.Navigated -= handler;
-            if (ContentFrame.Content is ProjectsPage page)
-            {
-                page.TriggerNewProjectFlow();
-            }
-        };
-        ContentFrame.Navigated += handler;
-        NavigateTopLevel(typeof(ProjectsPage), new EntranceNavigationTransitionInfo());
+        ContentFrame.Navigate(typeof(NewProjectPage), null,
+            new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromRight });
     }
 
     public void NavigateToInstallEditor()

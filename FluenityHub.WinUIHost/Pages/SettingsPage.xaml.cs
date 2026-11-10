@@ -57,6 +57,7 @@ public sealed partial class SettingsPage : Page
             {
                 MinimizeBehaviorComboBox.SelectedIndex = Math.Clamp(_settings.MinimizeBehavior, 0, 3);
             }
+            NewProjectExperienceComboBox.SelectedIndex = _settings.UseCompactNewProjectDialog ? 1 : 0;
 
             if (LowerPriorityToggleSwitch is not null)
             {
@@ -189,6 +190,13 @@ public sealed partial class SettingsPage : Page
         var minimizeIndex = MinimizeBehaviorComboBox.SelectedIndex >= 0 ? MinimizeBehaviorComboBox.SelectedIndex : 0;
         _settings.MinimizeBehavior = minimizeIndex;
 
+        SaveSettings();
+    }
+
+    private void OnNewProjectExperienceChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_isInitializing) return;
+        _settings.UseCompactNewProjectDialog = NewProjectExperienceComboBox.SelectedIndex == 1;
         SaveSettings();
     }
 

@@ -58,7 +58,7 @@ public sealed class NetworkConnectivityService
         }
     }
 
-    public bool CanAttemptInternet => Refresh() != AppNetworkState.Offline;
+    public bool CanAttemptInternet => State != AppNetworkState.Offline;
 
     public event EventHandler<NetworkStateChangedEventArgs>? StateChanged;
 
@@ -82,7 +82,7 @@ public sealed class NetworkConnectivityService
 
     public void EnsureCanAttemptInternet()
     {
-        if (Refresh() == AppNetworkState.Offline)
+        if (!CanAttemptInternet)
         {
             throw new OfflineException(OfflineMessage);
         }

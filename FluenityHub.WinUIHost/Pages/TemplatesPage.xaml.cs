@@ -565,7 +565,7 @@ public sealed partial class TemplatesPage : Page
                 return;
             }
 
-            var dialog = new NewProjectDialog(_installedEditors.Keys, template)
+            var dialog = new NewProjectDialog(_installedEditors, template)
             {
                 XamlRoot = activeXamlRoot
             };
